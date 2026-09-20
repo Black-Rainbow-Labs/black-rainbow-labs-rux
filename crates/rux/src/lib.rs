@@ -56,6 +56,7 @@ pub mod components;
 pub mod icon;
 pub mod layout;
 pub mod render;
+pub mod screen;
 pub mod text;
 pub mod theme;
 
@@ -66,6 +67,7 @@ use egui::{Color32, Pos2, Rect, Vec2};
 pub use icon::{Icon, IconAtlas, Mark};
 pub use layout::{Cross, Flex, Grid, Justify, Length, Pad, Pen};
 pub use render::{layer, Canvases, Chrome, Corners, Decor, Fill};
+pub use screen::{Insets, Pointer, Screen, SizeClass};
 pub use text::Style;
 pub use theme::{Elevation, Shadow, Theme};
 
@@ -83,6 +85,7 @@ pub struct RuxState {
     pub canvases: RefCell<Canvases>,
     pub icons: RefCell<IconAtlas>,
     theme: Cell<&'static Theme>,
+    screen: Cell<Screen>,
 }
 
 impl RuxState {
@@ -91,6 +94,7 @@ impl RuxState {
             canvases: RefCell::new(Canvases::default()),
             icons: RefCell::new(IconAtlas::default()),
             theme: Cell::new(theme),
+            screen: Cell::new(Screen::default()),
         }
     }
 
@@ -100,11 +104,31 @@ impl RuxState {
             canvases: RefCell::new(Canvases::deterministic()),
             icons: RefCell::new(IconAtlas::deterministic()),
             theme: Cell::new(theme),
+            screen: Cell::new(Screen::default()),
         }
     }
 
     pub fn theme(&self) -> &'static Theme {
         self.theme.get()
+    }
+
+    /// The device the components are being drawn on: how wide, what is covering the edges, and whether
+    /// the thing pointing at it is a finger.
+    ///
+    /// Beside the theme and behind a `Cell` for the same reason: `Rux` is built inside
+    /// [`render::layer`] and again inside [`Rux::overlay`], so a field on it would have to be threaded
+    /// through every call site including a consumer's own — and a popup opens a nested layer while the
+    /// one that opened it is still drawing.
+    pub fn screen(&self) -> Screen {
+        self.screen.get()
+    }
+
+    /// Say what device this is, once a frame, before anything draws.
+    ///
+    /// An application that does not call this gets [`Screen::default`], which is a desktop mouse — so
+    /// a program written before this existed behaves exactly as it did.
+    pub fn set_screen(&self, screen: Screen) {
+        self.screen.set(screen);
     }
 
     /// Switch themes. Every canvas is rasterised again on the next frame, because every colour in
@@ -159,6 +183,11 @@ pub struct Rux<'a> {
 impl<'a> Rux<'a> {
     pub fn theme(&self) -> &'static Theme {
         self.state.theme()
+    }
+
+    /// The device this is being drawn on. See [`RuxState::screen`].
+    pub fn screen(&self) -> Screen {
+        self.state.screen()
     }
 
     pub fn painter(&self) -> &egui::Painter {
@@ -263,6 +292,7 @@ pub mod prelude {
     pub use crate::icon::{Icon, Mark};
     pub use crate::layout::{Cross, Flex, Grid, Justify, Pad, Pen};
     pub use crate::text::{Style, Weight};
+    pub use crate::screen::{Insets, Pointer, Screen, SizeClass};
     pub use crate::theme::Opacity as _;
     pub use crate::{Rux, RuxState, Theme};
 }

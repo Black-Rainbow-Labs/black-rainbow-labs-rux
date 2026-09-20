@@ -175,10 +175,14 @@ impl<'a> SubGroup<'a> {
     }
 
     /// How tall the heading and its hairline come to, which a caller needs before it lays the body out.
-    pub fn head_height(&self) -> f32 {
+    ///
+    /// The whole heading is the collapse control, so on a touch screen it is the minimum target tall
+    /// rather than one line of 10.5px mono.
+    pub fn head_height(&self, rux: &Rux<'_>) -> f32 {
+        let head = rux.screen().target_height(Self::HEAD_HEIGHT);
         match self.first {
-            true => Self::HEAD_HEIGHT,
-            false => Self::HEAD_HEIGHT + 14.0,
+            true => head,
+            false => head + 14.0,
         }
     }
 
@@ -199,7 +203,7 @@ impl<'a> SubGroup<'a> {
         };
         let head = Rect::from_min_size(
             egui::pos2(rect.left(), top),
-            Vec2::new(rect.width(), Self::HEAD_HEIGHT),
+            Vec2::new(rect.width(), rux.screen().target_height(Self::HEAD_HEIGHT)),
         );
         let response = interact(rux, head, "rux-subgroup", Sense::click());
         pointing(rux, &response, true);

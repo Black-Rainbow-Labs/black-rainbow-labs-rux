@@ -1,6 +1,15 @@
 [workspace]
 resolver = "2"
-members = ["crates/rux", "examples", "storybook"]
+members = [
+    "crates/rux",
+    "examples",
+    "storybook",
+    "mobile/app",
+    "mobile/android/glue",
+    "mobile/ios",
+    "mobile/ios/zig-ios-cc",
+    "mobile/preview",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +20,7 @@ publish = false
 [workspace.dependencies]
 rux = { path = "crates/rux" }
 rux-examples = { path = "examples" }
+rux-mobile = { path = "mobile/app" }
 
 # `egui` for input, hit testing, scrolling, text layout and shaping, the caret and the clipboard.
 # Everything this library draws that `epaint` can draw well — a flat rounded rectangle, a line, text —

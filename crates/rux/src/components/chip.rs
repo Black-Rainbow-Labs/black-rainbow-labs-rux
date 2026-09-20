@@ -126,7 +126,10 @@ impl<'a> Chip<'a> {
             width += 18.0 + gap;
         }
         let pad = self.pad();
-        Vec2::new(width + pad.horizontal(), rux.measure(style, "Ag").y + pad.vertical())
+        Vec2::new(
+            width + pad.horizontal(),
+            rux.screen().target_height(rux.measure(style, "Ag").y + pad.vertical()),
+        )
     }
 
     /// Draws, and answers whether the dismiss was pressed.
@@ -210,7 +213,7 @@ impl<'a> Chip<'a> {
                 // `.ic-preset-chip__x { width: 18px; border-radius: 50%; background: rgba(255,255,255,0.25) }`.
                 let x = interact(rux, *at, "rux-chip-dismiss", Sense::click());
                 pointing(rux, &x, true);
-                let wash = match x.hovered() {
+                let wash = match super::hovering(rux, &x) {
                     true => 0.4,
                     false => 0.25,
                 };

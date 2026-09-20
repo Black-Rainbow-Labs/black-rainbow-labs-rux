@@ -175,3 +175,40 @@ made rather than left to be rediscovered.
 
 British spelling in prose, and the American spelling where a name in the code already uses it, such as
 `color` in `egui`.
+
+## The phone is a `Screen`, and it is the only thing a component may ask about the device (task-2032)
+
+`crates/rux/src/screen.rs` holds three facts — how wide, what is covering the edges, whether the thing
+pointing at it is a finger — and an application sets them once a frame:
+
+```rust
+state.set_screen(Screen::phone(size, insets));   // or Screen::desktop(size), or Screen::read(ctx)
+```
+
+**`Screen::desktop` is exactly the behaviour this library had before it knew about phones**: a mouse, no
+insets, `min_target() == 0.0`, and every `target_height(x)` returning `x`. That is why
+`crates/rux/tests/touch.rs` can assert every desktop measurement against the number it was, as a table.
+Keep that property: a change that makes a desktop measurement move is a change to the reference.
+
+Two rules follow from it, and both are easy to get wrong:
+
+1. **A touch target grows the LAYOUT box, not the hit box.** In touch a control's `measure()` returns at
+   least 44 points and what is drawn does not change — a 28 point circle stays a 28 point circle, centred
+   in a 44 point box. Widening only the rectangle handed to `interact` makes two neighbouring controls
+   claim overlapping targets, and egui gives an overlapping point to whichever widget asked last, so the
+   second one silently eats a strip of the first.
+2. **`Visual::of` takes the pointer**, and `Pointer::Touch` never answers `Hover`. Anything that reads
+   `Response::hovered` to decide a colour goes through `components::hovering` instead, for the same
+   reason: a finger does not hover, and egui keeps a touch's last position after the finger lifts.
+
+## Run the tests, and remember they are a DEBUG build (task-2032)
+
+`crates/rux/tests/draw.rs` draws every component, in both themes, on a desktop screen and on a phone
+screen, with no window. It exists because a defect lived in `rux::icon` from the day it was written and
+**no release build could show it**: `epaint::Mesh::colored_vertex` carries a `debug_assert` that the mesh
+has no texture, and both places that draw a turned mark called it and wrote the texture coordinate over
+the vertex afterwards. Right picture with assertions off; dead process with them on.
+
+Every test here ran the geometry rather than the drawing, and every program that ran was `--release`, so
+nothing had executed that line with assertions on until the Android application's first frame did. If a
+component gains a drawing path, it goes in that file.

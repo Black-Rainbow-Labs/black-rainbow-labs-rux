@@ -369,12 +369,12 @@ pub fn paint_arc(
     let uvs = [uv.left_top(), uv.right_top(), uv.right_bottom(), uv.left_bottom()];
     for (corner, uv) in corners.into_iter().zip(uvs) {
         let offset = corner - centre;
-        mesh.colored_vertex(
+        // A vertex with its texture coordinate, pushed whole. See [`textured_vertex`].
+        mesh.vertices.push(textured_vertex(
             centre + Vec2::new(offset.x * cos - offset.y * sin, offset.x * sin + offset.y * cos),
+            uv,
             Color32::WHITE,
-        );
-        let last = mesh.vertices.len() - 1;
-        mesh.vertices[last].uv = uv;
+        ));
     }
     mesh.add_triangle(0, 1, 2);
     mesh.add_triangle(0, 2, 3);
@@ -455,13 +455,34 @@ pub fn paint(
     let uvs = [uv.left_top(), uv.right_top(), uv.right_bottom(), uv.left_bottom()];
     for (corner, uv) in corners.into_iter().zip(uvs) {
         let offset = corner - centre;
-        mesh.colored_vertex(centre + Vec2::new(offset.x * cos - offset.y * sin, offset.x * sin + offset.y * cos), colour);
-        let last = mesh.vertices.len() - 1;
-        mesh.vertices[last].uv = uv;
+        mesh.vertices.push(textured_vertex(
+            centre + Vec2::new(offset.x * cos - offset.y * sin, offset.x * sin + offset.y * cos),
+            uv,
+            colour,
+        ));
     }
     mesh.add_triangle(0, 1, 2);
     mesh.add_triangle(0, 2, 3);
     painter.add(egui::Shape::mesh(mesh));
+}
+
+/// A vertex carrying a texture coordinate.
+///
+/// **`Mesh::colored_vertex` may not be used on a mesh that has a texture, and `epaint` says so with a
+/// `debug_assert`.** Both turned marks here used to call it and then write the texture coordinate over
+/// the vertex afterwards, which produced the right picture in a release build and killed the process in
+/// a debug one:
+///
+/// ```text
+/// thread '<unnamed>' panicked at epaint-0.36.2/src/mesh.rs:170:
+/// Mesh has an assigned texture
+/// ```
+///
+/// Nothing found it for as long as every build that ran was a release build. The first debug build that
+/// drew a turned chevron — the Android application's first frame, where a select, a stepper and a
+/// spinner all draw one — died before it reached the screen.
+fn textured_vertex(pos: Pos2, uv: Pos2, colour: Color32) -> egui::epaint::Vertex {
+    egui::epaint::Vertex { pos, uv, color: colour }
 }
 
 /// One icon part as a path in the viewBox's own units.

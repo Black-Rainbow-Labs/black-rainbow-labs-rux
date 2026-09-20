@@ -38,7 +38,7 @@ pub use field::{TextArea, TextAreaOutcome, TextInput, TextInputOutcome};
 pub use icon_button::{IconButton, IconButtonSize, IconButtonVariant};
 pub use list::{menu_heading, ListItem, ListItemOutcome};
 pub use loader::{elapsed_text, Progress, Skeleton, Spinner, SPINNER_DIAMETER};
-pub use modal::{split_body, Modal, ModalOutcome};
+pub use modal::{sheet_frame, split_body, Modal, ModalOutcome, Present};
 pub use panel::{Divider, Panel, PanelKind, SubGroup, SubGroupOutcome, Well};
 pub use project_menu::{ProjectMenu, ProjectMenuOutcome};
 pub use scrollbar::Scrollbar;
@@ -46,10 +46,11 @@ pub use select::{Select, SelectOutcome, SelectState, SELECT_MENU_MAX_HEIGHT};
 pub use stepper::{Stepper, StepperOutcome, STEPPER_WIDTH};
 pub use tile::{Tile, TileKind};
 pub use toggle::{DiceToggle, Segmented, SegmentedOutcome, Switch};
-pub use top_nav::{NavItem, TopNav, TopNavOutcome};
+pub use top_nav::{Fit, NavItem, TopNav, TopNavOutcome};
 
-use egui::{Rect, Response, Sense};
+use egui::{Rect, Response, Sense, Vec2};
 
+use crate::screen::Pointer;
 use crate::Rux;
 
 /// Which of a control's four states it is in this frame.
@@ -67,8 +68,15 @@ pub enum Visual {
 }
 
 impl Visual {
-    pub fn of(response: &Response, enabled: bool) -> Self {
-        match (enabled, response.is_pointer_button_down_on(), response.hovered()) {
+    /// Which state a control is in, for the pointer that is pointing at it.
+    ///
+    /// **`Pointer::Touch` never answers `Hover`.** A finger is either on the control or off the screen,
+    /// and egui keeps a touch's last position after the finger lifts — so on a phone a hover state
+    /// would stay behind on whatever was last tapped. Nineteen rules in `reference/image-creator.css`
+    /// change a colour on `:hover`, and this is the one place that decides whether any of them apply.
+    pub fn of(response: &Response, enabled: bool, pointer: Pointer) -> Self {
+        match (enabled, response.is_pointer_button_down_on(), response.hovered() && pointer.hovers())
+        {
             (false, _, _) => Visual::Disabled,
             (true, true, _) => Visual::Active,
             (true, false, true) => Visual::Hover,
@@ -109,4 +117,42 @@ pub(crate) fn pointing(rux: &Rux<'_>, response: &Response, enabled: bool) {
     if response.hovered() && enabled {
         rux.ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
+}
+
+/// Whether a control should draw itself as pointed at.
+///
+/// `Response::hovered` on its own is not the question, because a finger does not hover. See
+/// [`Visual::of`].
+pub(crate) fn hovering(rux: &Rux<'_>, response: &Response) -> bool {
+    response.hovered() && rux.screen().pointer.hovers()
+}
+
+/// Grow a rectangle about its own centre until neither side is under the pointer's minimum target.
+///
+/// On a mouse the minimum is zero and this hands back exactly what it was given, which is why every
+/// desktop measurement is unchanged.
+///
+/// **Use this for a control whose drawn shape must not grow** — a circle, a switch track, a scrollbar
+/// lane. A control that can simply be taller grows in `measure` instead, and that is the better of the
+/// two: two 28 point circles six points apart claim 44 point targets that overlap by ten, and egui
+/// gives an overlapping point to whichever widget asked last, so the second one silently eats a strip
+/// of the first. Growing the layout cannot do that, because the layout is what keeps controls apart.
+/// The mobile screens therefore place with `measure`.
+pub(crate) fn touch_target(rux: &Rux<'_>, rect: Rect) -> Rect {
+    let min = rux.screen().min_target();
+    Rect::from_center_size(
+        rect.center(),
+        Vec2::new(rect.width().max(min), rect.height().max(min)),
+    )
+}
+
+/// Claim a rectangle for a control whose drawn shape is smaller than its target.
+pub(crate) fn interact_target(
+    rux: &mut Rux<'_>,
+    rect: Rect,
+    salt: &str,
+    sense: Sense,
+) -> Response {
+    let target = touch_target(rux, rect);
+    interact(rux, target, salt, sense)
 }

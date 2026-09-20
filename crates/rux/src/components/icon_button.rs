@@ -7,7 +7,7 @@
 
 use egui::{Color32, Pos2, Rect, Response, Sense, Vec2};
 
-use super::{interact, pointing, Visual};
+use super::{pointing, Visual};
 use crate::icon::{Icon, Mark};
 use crate::text::Style;
 use crate::theme::Opacity as _;
@@ -136,16 +136,24 @@ impl IconButton {
         self
     }
 
-    pub fn measure(&self, _rux: &Rux<'_>) -> Vec2 {
-        Vec2::splat(self.size.diameter())
+    /// The room it wants, which on a touch screen is the minimum target rather than the circle.
+    ///
+    /// **The circle itself never grows.** Three of the five diameters — 24, 28 and 32 — are under the
+    /// 44 points a finger needs, so on a phone the control claims a 44 point box and draws its own
+    /// circle centred in it. Growing the layout rather than only the hit rectangle is what keeps two
+    /// neighbouring icon buttons from claiming overlapping targets; see [`super::touch_target`].
+    pub fn measure(&self, rux: &Rux<'_>) -> Vec2 {
+        rux.screen().target(Vec2::splat(self.size.diameter()))
     }
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> Response {
         // Square and centred whatever it was handed, because a circle drawn into an oblong is an oval.
         let side = self.size.diameter().min(rect.width()).min(rect.height());
         let rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
-        let response = interact(rux, rect, "rux-icon-button", Sense::click());
-        let visual = Visual::of(&response, self.enabled);
+        // The drawn circle is `rect`; what a finger may press is that circle grown to the minimum
+        // target. On a mouse the minimum is zero and the two are the same rectangle.
+        let response = super::interact_target(rux, rect, "rux-icon-button", Sense::click());
+        let visual = Visual::of(&response, self.enabled, rux.screen().pointer);
         pointing(rux, &response, self.enabled);
 
         let theme = rux.theme();

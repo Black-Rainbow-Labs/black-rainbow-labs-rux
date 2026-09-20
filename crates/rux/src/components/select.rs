@@ -46,6 +46,9 @@ pub const SELECT_MENU_MAX_HEIGHT: f32 = 280.0;
 const MENU_OFFSET: f32 = 6.0;
 /// `padding: 6px` on the menu, `padding: 8px 12px` on a row.
 const MENU_PAD: f32 = 6.0;
+/// The handle across the top of a sheet, and the room it takes. The same 36 by 4 as a dialog's.
+const SHEET_GRABBER: Vec2 = Vec2::new(36.0, 4.0);
+const SHEET_GRAB_ROOM: f32 = 20.0;
 
 /// A dropdown.
 pub struct Select<'a> {
@@ -114,7 +117,10 @@ impl<'a> Select<'a> {
     pub fn measure(&self, rux: &Rux<'_>) -> Vec2 {
         let value = self.value();
         let words = rux.measure(self.style(), value);
-        Vec2::new(words.x + 12.0 * 2.0 + 8.0 + 13.0, (words.y + 9.0 * 2.0).max(34.0))
+        Vec2::new(
+            words.x + 12.0 * 2.0 + 8.0 + 13.0,
+            rux.screen().target_height((words.y + 9.0 * 2.0).max(34.0)),
+        )
     }
 
     fn value(&self) -> &str {
@@ -126,7 +132,7 @@ impl<'a> Select<'a> {
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect, state: &mut SelectState) -> SelectOutcome {
         let response = interact(rux, rect, "rux-select", Sense::click());
-        let visual = Visual::of(&response, self.enabled);
+        let visual = Visual::of(&response, self.enabled, rux.screen().pointer);
         pointing(rux, &response, self.enabled);
         let mut outcome = SelectOutcome::default();
         if response.clicked() && self.enabled {
@@ -192,32 +198,66 @@ impl<'a> Select<'a> {
     ) -> Option<usize> {
         let row = self.row_height(rux);
         let content = row * self.options.len() as f32;
-        let height = (content + MENU_PAD * 2.0).min(SELECT_MENU_MAX_HEIGHT);
-        let screen = rux.ui.ctx().content_rect();
+        let screen_rect = rux.ui.ctx().content_rect();
+
+        // On a compact screen the menu is a sheet from the bottom edge rather than a list anchored under
+        // its trigger — the same shape `Modal` takes there, drawn by the same function, because a menu
+        // and a dialog should be one idea on a phone. A 200 point list anchored to a control halfway
+        // down a 390 point screen has nowhere to go and flips about as the page scrolls.
+        let sheet = rux.screen().is_compact();
+        let inset = match sheet {
+            true => rux.screen().insets.bottom,
+            false => 0.0,
+        };
+        let pad_top = match sheet {
+            true => SHEET_GRAB_ROOM,
+            false => MENU_PAD,
+        };
+        let height = match sheet {
+            true => (content + pad_top + MENU_PAD + inset).min(screen_rect.height() * 0.6),
+            false => (content + MENU_PAD * 2.0).min(SELECT_MENU_MAX_HEIGHT),
+        };
 
         // `.ic-select--up` when it is asked for, and also when there is no room below — a menu drawn
         // off the bottom of the window is a menu nobody can reach.
         let below = trigger.bottom() + MENU_OFFSET;
-        let upwards = self.up || below + height > screen.bottom();
-        let top = match upwards {
-            true => trigger.top() - MENU_OFFSET - height,
-            false => below,
+        let upwards = !sheet && (self.up || below + height > screen_rect.bottom());
+        let area = match sheet {
+            true => super::sheet_frame(screen_rect, height, false),
+            false => {
+                let top = match upwards {
+                    true => trigger.top() - MENU_OFFSET - height,
+                    false => below,
+                };
+                Rect::from_min_size(
+                    egui::pos2(trigger.left(), top),
+                    Vec2::new(trigger.width(), height),
+                )
+            }
         };
-        let area = Rect::from_min_size(
-            egui::pos2(trigger.left(), top),
-            Vec2::new(trigger.width(), height),
-        );
 
         let id = rux.ui.id().with(("rux-select-menu", trigger.min.x.to_bits(), trigger.min.y.to_bits()));
         let options = self.options;
         let selected = self.selected;
         let style = self.style();
         let scroll = &mut state.scroll;
-        let max_scroll = (content + MENU_PAD * 2.0 - height).max(0.0);
+        let max_scroll = (content + pad_top + MENU_PAD + inset - height).max(0.0);
 
         let (chosen, pointer_inside) = rux.overlay(id, area, egui::Order::Foreground, |rux| {
             let theme = rux.theme();
-            rux.chrome.surface(area, theme.radius.md, theme.surface.s1, theme.elevation.raised_lg);
+            // A sheet is square along the edge it came from. See [`super::Present`].
+            let corners = match sheet {
+                true => crate::Corners::top(theme.radius.xl),
+                false => crate::Corners::all(theme.radius.md),
+            };
+            rux.chrome.surface(area, corners, theme.surface.s1, theme.elevation.raised_lg);
+            if sheet {
+                let grab = Rect::from_center_size(
+                    egui::pos2(area.center().x, area.top() + 10.0),
+                    SHEET_GRABBER,
+                );
+                rux.chrome.rect(grab, SHEET_GRABBER.y / 2.0, theme.surface.sunken);
+            }
 
             let pointer_inside = rux
                 .ui
@@ -232,14 +272,14 @@ impl<'a> Select<'a> {
             // Rounded corners are the one clip `egui` cannot do, so the rows are cut by the chrome and
             // by `egui`'s own square clip together: the chrome's for the decoration, `egui`'s for the
             // text.
-            rux.chrome.clip(area, theme.radius.md);
+            rux.chrome.clip(area, corners);
             let was = rux.ui.clip_rect();
             rux.ui.set_clip_rect(area.intersect(was));
 
             let mut chosen = None;
             for (index, option) in options.iter().enumerate() {
                 let rect = Rect::from_min_size(
-                    egui::pos2(area.left() + MENU_PAD, area.top() + MENU_PAD + index as f32 * row - *scroll),
+                    egui::pos2(area.left() + MENU_PAD, area.top() + pad_top + index as f32 * row - *scroll),
                     Vec2::new(area.width() - MENU_PAD * 2.0, row),
                 );
                 if rect.bottom() < area.top() || rect.top() > area.bottom() {
@@ -248,7 +288,7 @@ impl<'a> Select<'a> {
                 let response = interact(rux, rect, "rux-select-item", Sense::click());
                 pointing(rux, &response, true);
                 let is_selected = selected == Some(index);
-                let hovered = response.hovered();
+                let hovered = super::hovering(rux, &response);
                 // `.ic-select__item.is-selected { background: rgba(47,107,255,0.04) }` and
                 // `:hover { background: rgba(47,107,255,0.06) }`.
                 if hovered {
@@ -305,6 +345,6 @@ impl<'a> Select<'a> {
 
     /// `.ic-select__item { padding: 8px 12px }` plus the line the words take.
     fn row_height(&self, rux: &Rux<'_>) -> f32 {
-        rux.measure(self.style(), "Ag").y + 16.0
+        rux.screen().target_height(rux.measure(self.style(), "Ag").y + 16.0)
     }
 }

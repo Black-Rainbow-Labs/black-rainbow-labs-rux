@@ -83,14 +83,14 @@ impl<'a> ListItem<'a> {
         let line = rux.measure(self.style, "Ag").y;
         Vec2::new(
             rux.measure(self.style, self.label).x + self.pad.horizontal() + 40.0,
-            line + self.pad.vertical(),
+            rux.screen().target_height(line + self.pad.vertical()),
         )
     }
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> ListItemOutcome {
         let response = interact(rux, rect, "rux-list-item", Sense::click());
         pointing(rux, &response, true);
-        let hovered = response.hovered();
+        let hovered = super::hovering(rux, &response);
         let theme = rux.theme();
         let radius = theme.radius.md;
 
@@ -152,7 +152,7 @@ impl<'a> ListItem<'a> {
                     if hovered || self.selected {
                         let hit = interact(rux, at.expand(4.0), "rux-list-action", Sense::click());
                         pointing(rux, &hit, true);
-                        let tint = match hit.hovered() {
+                        let tint = match super::hovering(rux, &hit) {
                             true => theme.accent.mint,
                             false => crate::theme::with_opacity(theme.accent.mint, 0.75),
                         };

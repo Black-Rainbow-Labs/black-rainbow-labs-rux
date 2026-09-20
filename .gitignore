@@ -2,3 +2,12 @@
 **/*.rs.bk
 _agent_output/
 .DS_Store
+
+# Gradle's own output and caches, and the native libraries `build-android.ps1` drops in for it.
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/app/src/main/jniLibs/
+
+# An iOS SDK is Apple's and is not redistributed here. `mobile/ios/README.md` says where to get one.
+mobile/ios/sdk/

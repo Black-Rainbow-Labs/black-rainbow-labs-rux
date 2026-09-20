@@ -1,0 +1,12 @@
+# For the route where `xtool` installs this on a phone from WSL.
+#
+# `xtool` (https://xtool.sh) builds, signs and installs iOS applications with no Xcode and no Mac. It is
+# not what `build-ios.ps1` uses — that produces the signed `.app` on Windows by itself — but `xtool` is
+# how that bundle gets onto a device, and it needs this file to know what it is looking at.
+#
+# What it needs beyond this file: a Swift 6.3 toolchain in WSL, `usbmuxd` with USB passthrough via
+# USBIPD, an iPhone on the cable, an Apple ID, and the Darwin SDK extracted from an Xcode 26 download.
+# See README.md.
+version: 1
+bundleID: com.blackrainbowlabs.rux
+infoPath: RuxMobile/Info.plist

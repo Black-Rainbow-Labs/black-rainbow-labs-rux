@@ -97,7 +97,10 @@ impl<'a> Segmented<'a> {
         let line = rux.measure(self.style(), "Ag").y;
         Vec2::new(
             widths.iter().sum::<f32>() + gaps + self.track_pad() * 2.0,
-            line.max(self.mark()) + self.item_pad().vertical() + self.track_pad() * 2.0,
+            // Each row inside the track is its own target, so the whole control has to be the minimum
+            // target plus the track's own padding — not just the minimum target.
+            rux.screen().target_height(line.max(self.mark()) + self.item_pad().vertical())
+                + self.track_pad() * 2.0,
         )
     }
 
@@ -125,7 +128,7 @@ impl<'a> Segmented<'a> {
                 outcome.chosen = Some(index);
             }
             let active = index == self.active;
-            let ink = match (active, self.accents.and_then(|list| list.get(index)), response.hovered())
+            let ink = match (active, self.accents.and_then(|list| list.get(index)), super::hovering(rux, &response))
             {
                 (true, Some(accent), _) => *accent,
                 (true, None, _) => theme.ink.i900,
@@ -148,8 +151,13 @@ impl<'a> Segmented<'a> {
             let words = rux.measure(self.style(), label).x;
             let cells = inner.hug(words).solve_all();
             let mut slot = cells.iter();
-            if let (Some(icon), Some(at)) = (icon, slot.next()) {
-                rux.mark_in(Mark::new(*icon, self.mark()), *at, ink);
+            // `slot.next()` is called only when there IS a mark. Reading it inside a tuple pattern
+            // took the next cell whether or not the branch matched, so a segment with no icon —
+            // `("All", None)` — consumed its own label's cell and then drew nothing at all.
+            if let Some(icon) = icon {
+                if let Some(at) = slot.next() {
+                    rux.mark_in(Mark::new(*icon, self.mark()), *at, ink);
+                }
             }
             if let Some(at) = slot.next() {
                 let galley = rux.text(self.style(), label, ink);
@@ -200,15 +208,16 @@ impl DiceToggle {
         self
     }
 
-    pub fn measure(&self, _rux: &Rux<'_>) -> Vec2 {
-        Vec2::splat(Self::SIZE)
+    /// 28 points drawn, and a 44 point box round it on a touch screen.
+    pub fn measure(&self, rux: &Rux<'_>) -> Vec2 {
+        rux.screen().target(Vec2::splat(Self::SIZE))
     }
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> Response {
         let side = Self::SIZE.min(rect.width()).min(rect.height());
         let rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
-        let response = interact(rux, rect, "rux-dice", Sense::click());
-        let visual = Visual::of(&response, self.enabled);
+        let response = super::interact_target(rux, rect, "rux-dice", Sense::click());
+        let visual = Visual::of(&response, self.enabled, rux.screen().pointer);
         pointing(rux, &response, self.enabled);
 
         let theme = rux.theme();
@@ -272,14 +281,18 @@ impl Switch {
         self
     }
 
-    pub fn measure(&self, _rux: &Rux<'_>) -> Vec2 {
-        Self::SIZE
+    /// 44 by 24 on a mouse; a 44 point square on a touch screen, with the track drawn centred in it.
+    ///
+    /// The track's own height is not grown, because 44 by 24 is the ratio the token file's knob
+    /// gradient was drawn for and a taller track would stretch it.
+    pub fn measure(&self, rux: &Rux<'_>) -> Vec2 {
+        rux.screen().target(Self::SIZE)
     }
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> Response {
         let rect = Rect::from_center_size(rect.center(), Self::SIZE.min(rect.size()));
-        let response = interact(rux, rect, "rux-switch", Sense::click());
-        let visual = Visual::of(&response, self.enabled);
+        let response = super::interact_target(rux, rect, "rux-switch", Sense::click());
+        let visual = Visual::of(&response, self.enabled, rux.screen().pointer);
         pointing(rux, &response, self.enabled);
 
         let theme = rux.theme();

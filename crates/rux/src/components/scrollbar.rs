@@ -57,8 +57,12 @@ impl Scrollbar {
             return 0.0;
         }
         let thumb = self.thumb(offset);
+        // The lane is as wide as the pointer needs, not as wide as the thumb is drawn. A six point
+        // strip is a mouse target; a finger wants the minimum target, and the lane is at the panel's
+        // own edge so there is no neighbouring control for the extra width to take a press from.
+        let grip = WIDTH.max(rux.screen().min_target());
         let lane = Rect::from_min_max(
-            egui::pos2(thumb.left(), self.area.top()),
+            egui::pos2(thumb.right() - grip, self.area.top()),
             egui::pos2(thumb.right(), self.area.bottom()),
         );
         let response = interact(rux, lane, "rux-scrollbar", Sense::click_and_drag());
@@ -77,11 +81,12 @@ impl Scrollbar {
         }
         let theme = rux.theme();
         let thumb = self.thumb(offset);
-        let hovered = rux
-            .ui
-            .ctx()
-            .pointer_latest_pos()
-            .is_some_and(|at| thumb.expand2(Vec2::new(8.0, 0.0)).contains(at));
+        let hovered = rux.screen().pointer.hovers()
+            && rux
+                .ui
+                .ctx()
+                .pointer_latest_pos()
+                .is_some_and(|at| thumb.expand2(Vec2::new(8.0, 0.0)).contains(at));
         // Quiet it is the sunken surface; under the pointer it is the ink, which is the one place the
         // reference's own `::-webkit-scrollbar-thumb` colour is not quite enough to see.
         let colour = match hovered {

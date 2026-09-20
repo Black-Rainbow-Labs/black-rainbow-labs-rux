@@ -1,0 +1,17 @@
+[package]
+name = "rux-mobile-preview"
+description = "Runs mobile/app inside a phone frame on a desktop, at a real device's logical size with that device's safe area insets."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "rux-mobile-preview"
+path = "src/main.rs"
+
+[dependencies]
+rux.workspace = true
+rux-mobile = { path = "../app" }
+egui.workspace = true
+eframe.workspace = true

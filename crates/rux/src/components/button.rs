@@ -162,7 +162,10 @@ impl<'a> Button<'a> {
             * (f32::from(self.icon.is_some()) + f32::from(self.trailing.is_some()));
         Vec2::new(
             words.x + marks + gaps + inline * 2.0,
-            (words.y.max(mark) + block * 2.0).max(self.min_height()),
+            // A button fills whatever rectangle it is handed, so on a touch screen it simply asks to
+            // be at least as tall as the minimum target rather than floating inside a larger box.
+            rux.screen()
+                .target_height((words.y.max(mark) + block * 2.0).max(self.min_height())),
         )
     }
 
@@ -177,7 +180,7 @@ impl<'a> Button<'a> {
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> Response {
         let response = interact(rux, rect, "rux-button", Sense::click());
-        let visual = Visual::of(&response, self.enabled);
+        let visual = Visual::of(&response, self.enabled, rux.screen().pointer);
         pointing(rux, &response, self.enabled);
 
         let theme = rux.theme();

@@ -1,0 +1,62 @@
+[package]
+name = "rux-mobile"
+description = "The mobile application: rux components laid out for a phone. One crate, no platform code — each shell in mobile/ios, mobile/android and mobile/preview constructs it and hands it to the entry point its platform demands."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+# **An `rlib` and nothing else**, which is the whole point of this crate: it is the application, and the
+# three shells are what turn it into a program.
+#
+# It used to be `["staticlib", "cdylib", "rlib"]`, and that does not work. Cargo builds **every** crate
+# type in the list whenever the library is built, so an iOS build of `mobile/ios` — which wants a bin and
+# an rlib — also tried to link `librux_mobile.dylib`, and a dylib for iOS is a link, and a link needs
+# every framework resolved. The shells each declare the one crate type their platform loads:
+# `mobile/android/glue` a `cdylib`, `mobile/ios` a `staticlib` beside its `bin`.
+name = "rux_mobile"
+crate-type = ["rlib"]
+
+[dependencies]
+rux.workspace = true
+egui.workspace = true
+
+# ------------------------------------------------------------------------------------------------
+# `eframe` is declared per target rather than inherited from the workspace, and that is not tidiness.
+#
+# Cargo features are additive across a build, so inheriting the workspace's `eframe` — which has
+# `accesskit` on for the storybook — and then adding `android-native-activity` here gives Android both at
+# once, and `eframe` `compile_error!`s exactly that pair:
+#
+#     error: `accesskit` feature is only available with `android-game-activity`
+#
+# which is what this build did before the dependency was split. `GameActivity` is the base class that
+# would allow AccessKit, and it needs a Gradle build that fetches `androidx.games:games-activity` from
+# Maven and a Java or Kotlin subclass. `NativeActivity` needs neither, so the Android build is the one
+# that gives up the screen reader — see `mobile/android/README.md`, which says so and why.
+# ------------------------------------------------------------------------------------------------
+
+[target.'cfg(not(target_os = "android"))'.dependencies.eframe]
+version = "0.36"
+default-features = false
+features = ["wgpu", "default_fonts", "accesskit"]
+
+[target.'cfg(target_os = "android")'.dependencies.eframe]
+version = "0.36"
+default-features = false
+features = ["wgpu", "default_fonts", "android-native-activity"]
+
+# `winit` is named directly only for the one type `android_main` takes. The version has to be the one
+# `eframe` depends on — cargo unifies them into a single crate, and a mismatch would mean two glue crates
+# each claiming to be the application's entry point.
+[target.'cfg(target_os = "android")'.dependencies.winit]
+version = "0.30.13"
+default-features = false
+features = ["android-native-activity"]
+
+[target.'cfg(target_os = "android")'.dependencies.android_logger]
+version = "0.14"
+
+[target.'cfg(target_os = "android")'.dependencies.log]
+version = "0.4"

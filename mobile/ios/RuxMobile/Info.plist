@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+
+    <!-- The name of the executable inside the bundle. It is `[[bin]] name` in Cargo.toml, and the two
+         have to agree or iOS reports the application as damaged. -->
+    <key>CFBundleExecutable</key>
+    <string>RuxMobile</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.blackrainbowlabs.rux</string>
+    <key>CFBundleName</key>
+    <string>RUX</string>
+    <key>CFBundleDisplayName</key>
+    <string>RUX</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>MinimumOSVersion</key>
+    <string>15.0</string>
+    <key>UIDeviceFamily</key>
+    <array>
+        <integer>1</integer>
+        <integer>2</integer>
+    </array>
+
+    <!-- Metal, because that is the backend wgpu uses on an iPhone. -->
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+        <string>metal</string>
+    </array>
+
+    <!-- **No launch storyboard, deliberately.** An application with neither a launch storyboard nor
+         `UILaunchScreen` is letterboxed by iOS into a 320 by 480 box, and everything this repository
+         does about safe areas and window size classes would then be measured against the wrong window.
+         An empty `UILaunchScreen` dictionary is the modern way to say "full size, nothing drawn", and it
+         needs no nib and no Interface Builder — which matters here, because there is no Xcode on the
+         machine that built this. -->
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIStatusBarStyle</key>
+    <string>UIStatusBarStyleLightContent</string>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+</dict>
+</plist>

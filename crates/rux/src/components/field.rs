@@ -103,7 +103,7 @@ impl<'a> TextInput<'a> {
     pub fn measure(&self, rux: &Rux<'_>) -> Vec2 {
         let line = rux.measure(self.style, "Ag").y;
         let mark = f32::from(self.icon.is_some()) * (13.0 + 10.0);
-        Vec2::new(240.0 + mark, line + self.pad.vertical())
+        Vec2::new(240.0 + mark, rux.screen().target_height(line + self.pad.vertical()))
     }
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> TextInputOutcome {

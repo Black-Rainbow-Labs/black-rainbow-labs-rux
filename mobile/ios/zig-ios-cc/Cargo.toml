@@ -1,0 +1,11 @@
+[package]
+name = "zig-ios-cc"
+description = "The linker cargo calls for aarch64-apple-ios: zig cc, with the iOS SDK's paths and without the two arguments zig's linker refuses."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "zig-ios-cc"
+path = "src/main.rs"

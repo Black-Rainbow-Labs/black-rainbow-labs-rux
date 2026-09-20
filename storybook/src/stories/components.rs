@@ -652,7 +652,7 @@ fn sub_group(rux: &mut Rux<'_>, demo: &mut Demo, area: Rect) -> f32 {
             _ => demo.dice || index != 0,
         };
         let head = SubGroup::new(title, icon, accent, open);
-        let strip = pen.strip(head.head_height() + if open { 46.0 } else { 0.0 });
+        let strip = pen.strip(head.head_height(rux) + if open { 46.0 } else { 0.0 });
         let outcome = head.first(index == 0).show(rux, strip.intersect(area));
         if open {
             let body = Rect::from_min_size(outcome.body.min, Vec2::new(280.0, 34.0));

@@ -6,12 +6,14 @@ written: `egui` for input, hit testing, scrolling and text, and `vello_cpu` for 
 
 It ships two neumorphic themes transcribed from ai-service's own stylesheets, nineteen components
 transcribed from the AI Studio design, an example page that rebuilds that design out of those
-components, and a desktop storybook that shows every component in every state.
+components, a desktop storybook that shows every component in every state, and **a mobile application
+for iOS and Android built out of the same components**.
 
 ```
-crates/rux/          the library — the only crate a consumer depends on
+crates/rux/          the library, and the only crate a consumer depends on
 examples/pages/      the Image Creator page, rebuilt from the components
 storybook/           the desktop storybook
+mobile/              the mobile application, and the three shells that run it
 reference/           the stylesheets and source everything here is measured against
 tasks/               the design
 ```
@@ -22,6 +24,13 @@ tasks/               the design
 cargo run --release -p rux-storybook
 cargo run --release -p rux-storybook -- --theme light-neumorphic
 cargo run --release -p rux-storybook -- --list
+
+# the same components on a phone, at a real device's size with its safe area
+cargo run --release -p rux-mobile-preview
+cargo run --release -p rux-mobile-preview -- --device iphone-se --theme light-neumorphic
+
+pwsh mobile/android/build-android.ps1     # build, install and launch on Android
+pwsh mobile/ios/build-ios.ps1             # compile, link, bundle and sign for iOS, on Windows
 ```
 
 The storybook has a theme picker at the top left, a filter over every story and state, a page per
