@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = ["crates/rux", "examples", "storybook"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+rux = { path = "crates/rux" }
+rux-examples = { path = "examples" }
+
+# `egui` for input, hit testing, scrolling, text layout and shaping, the caret and the clipboard.
+# Everything this library draws that `epaint` can draw well — a flat rounded rectangle, a line, text —
+# goes through it, so a hover wash costs a vertex colour rather than a rasterisation.
+egui = "0.36"
+
+# The decoration `epaint` cannot draw: an inset shadow, a diagonal gradient, a glow round a circle and a
+# rounded clip. All four are in the reference design on nearly every control.
+#
+# **The version is epaint's, and it has to be.** `epaint` 0.36 already depends on `vello_cpu` 0.1 to
+# rasterise the glyphs in its own font atlas, so this uses the copy that is already in the build; asking
+# for 0.2 would put a second renderer in the binary. Follow epaint when egui is next upgraded.
+#
+# **And `multithreading` must stay off.** Cargo features are additive across the whole graph, so
+# enabling it changes `RenderSettings::default()` for epaint too — and epaint's glyph rasteriser never
+# calls `flush()`, which the multithreaded dispatcher requires. Measured in Unluminous: every draw
+# panicked with "attempted to rasterize before flushing", from egui's own text.
+vello_cpu = { version = "0.1", default-features = false, features = ["std", "u8_pipeline"] }
+
+# `kurbo` is already in the tree underneath `vello_cpu`; it is named here so `BezPath::from_svg` can read
+# the icon set's path data verbatim. Features unify, so this adds no crate — and 0.11 ships the SVG path
+# reader unconditionally, so there is no feature to ask for.
+kurbo = "0.11"
+
+# `accesskit` is one of eframe's default features, so turning the defaults off turns it off with them.
+# Every control here calls `Response::widget_info` with a plain name; without it none of those names
+# reaches Narrator, UI Automation, VoiceOver or NSAccessibility.
+eframe = { version = "0.36", default-features = false, features = [
+    "wgpu",
+    "default_fonts",
+    "accesskit",
+] }
+
+egui_kittest = { version = "0.36", features = ["wgpu", "snapshot", "eframe"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"

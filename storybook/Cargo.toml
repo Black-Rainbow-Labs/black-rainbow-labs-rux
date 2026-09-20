@@ -1,0 +1,17 @@
+[package]
+name = "rux-storybook"
+description = "The desktop storybook: every component, every state, both themes, and the example pages."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "rux-storybook"
+path = "src/main.rs"
+
+[dependencies]
+rux.workspace = true
+rux-examples.workspace = true
+egui.workspace = true
+eframe.workspace = true

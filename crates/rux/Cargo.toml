@@ -1,0 +1,12 @@
+[package]
+name = "rux"
+description = "Black Rainbow Labs component library: neumorphic components drawn with egui and vello_cpu."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+egui.workspace = true
+vello_cpu.workspace = true
+kurbo.workspace = true

@@ -1,0 +1,413 @@
+<body>
+
+<div id="root"></div>
+
+<script src="fb640db3-47cb-49c6-8fea-226a9d56596d" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="86936c23-02a4-44da-baf3-e01ca4eb1799" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="4531e740-da92-41d8-bfb8-56fd72cb2817" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="36a66f86-715f-498c-8cf6-65678c88c523"></script>
+<script type="text/babel">
+
+/* Select */
+const Select = ({ options, value, onChange, placeholder = '—', mono = false, up = false }) => {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  return (
+    <div className={`ic-select ${open ? 'is-open' : ''} ${mono ? 'ic-select--mono' : ''} ${up ? 'ic-select--up' : ''}`} ref={ref}>
+      <button className="ic-select__trigger" onClick={() => setOpen(o => !o)}>
+        <span className={`ic-select__value ${!value ? 'ic-select__value--empty' : ''}`}>{value || placeholder}</span>
+        <span className="ic-select__chev"><SbIcon name="chevDown" size={13} stroke={2}/></span>
+      </button>
+      <div className="ic-select__menu">
+        {options.map(o => (
+          <div key={o} className={`ic-select__item ${o === value ? 'is-selected' : ''}`}
+            onClick={() => { onChange(o); setOpen(false); }}>
+            <span>{o}</span>
+            {o === value && <SbIcon name="check" size={12}/>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const Dice = ({ on, onClick }) => (
+  <button className={`ic-dice ${on ? 'is-on' : ''}`} onClick={onClick} title="Randomize per generation">
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="4"/>
+      <circle cx="8" cy="8" r="1" fill="currentColor"/>
+      <circle cx="16" cy="8" r="1" fill="currentColor"/>
+      <circle cx="12" cy="12" r="1" fill="currentColor"/>
+      <circle cx="8" cy="16" r="1" fill="currentColor"/>
+      <circle cx="16" cy="16" r="1" fill="currentColor"/>
+    </svg>
+  </button>
+);
+
+const Ctrl = ({ label, value, options, onChange, placeholder = '—', random, onToggleRandom }) => (
+  <div className="ic-ctrl">
+    <div className="ic-ctrl__col">
+      <span className="ic-ctrl__label">{label}</span>
+      <Select options={options} value={value} onChange={onChange} placeholder={placeholder}/>
+    </div>
+    <Dice on={random} onClick={onToggleRandom}/>
+  </div>
+);
+
+const SubGroup = ({ title, icon, variant = '', defaultOpen = true, children }) => {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div className={`ic-sub ic-sub--${variant} ${open ? '' : 'is-collapsed'}`}>
+      <div className="ic-sub__head" onClick={() => setOpen(o => !o)}>
+        <SbIcon name={icon} size={13}/>
+        <span>{title}</span>
+        <span className="ic-sub__chev"><SbIcon name="chevDown" size={11} stroke={2.2}/></span>
+      </div>
+      <div className="ic-sub__body">{children}</div>
+    </div>
+  );
+};
+
+const Spinner = () => (
+  <div className="ic-spinner">
+    <div className="ic-spinner__ring">
+      <svg viewBox="0 0 44 44" fill="none">
+        <defs>
+          <linearGradient id="sp-grad" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#2F6BFF"/>
+            <stop offset="100%" stopColor="#8B6BFF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="22" cy="22" r="18" stroke="rgba(30,37,48,0.08)" strokeWidth="3" fill="none"/>
+        <path d="M22 4 a18 18 0 0 1 18 18" stroke="url(#sp-grad)" strokeWidth="3" strokeLinecap="round" fill="none"/>
+      </svg>
+    </div>
+  </div>
+);
+
+const PROMPT_SAMPLES = {
+  image: ['Cinematic 35mm', 'Studio portrait', 'Product hero'],
+  video: ['Slow dolly in', 'Handheld chase', 'Static wide'],
+  vision: ['Detailed V1', 'Outfit Description', 'Simple Generic'],
+  chat: ['System · Director', 'System · Stylist'],
+};
+
+const PromptManager = ({ open, onClose }) => {
+  const [tab, setTab] = React.useState('vision');
+  const [selected, setSelected] = React.useState('Detailed V1');
+  const [title, setTitle] = React.useState('');
+  const [body, setBody] = React.useState('');
+  React.useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape' && open) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  const list = PROMPT_SAMPLES[tab] || [];
+  return (
+    <div className={`ic-modal-backdrop ${open ? 'is-open' : ''}`} onClick={onClose}>
+      <div className="ic-modal" onClick={e => e.stopPropagation()}>
+        <div className="ic-modal__head">
+          <div className="ic-modal__title">
+            <span className="ic-modal__title-icon"><SbIcon name="folder" size={14}/></span>
+            Prompt Manager
+          </div>
+          <button className="ic-modal__close" onClick={onClose}><SbIcon name="x" size={14} stroke={2}/></button>
+        </div>
+        <div className="ic-modal__body">
+          <div className="ic-modal__left">
+            <div className="ic-modal-tabs">
+              {[
+                { id: 'image',  label: 'Image',  icon: 'image' },
+                { id: 'video',  label: 'Video',  icon: 'video' },
+                { id: 'vision', label: 'Vision', icon: 'user' },
+                { id: 'chat',   label: 'Chat',   icon: 'chat' },
+              ].map(t => (
+                <button key={t.id}
+                  className={`ic-modal-tab ${tab === t.id ? 'is-active' : ''}`}
+                  data-kind={t.id}
+                  onClick={() => { setTab(t.id); setSelected(PROMPT_SAMPLES[t.id][0]); }}>
+                  <SbIcon name={t.icon} size={11}/>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="ic-modal__list">
+              {list.map(n => (
+                <div key={n}
+                  className={`ic-modal__list-item ${n === selected ? 'is-active' : ''}`}
+                  onClick={() => setSelected(n)}>
+                  <span>{n}</span>
+                  <button className="ic-modal__apply" onClick={e => { e.stopPropagation(); onClose(); }}>
+                    <SbIcon name="check" size={10} stroke={2.4}/> Apply
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="ic-modal__right">
+            <div className="ic-modal__form">
+              <div>
+                <label className="ic-form-label">Title</label>
+                <input className="ic-form-input" placeholder="Enter a title for this prompt…"
+                  value={title} onChange={e => setTitle(e.target.value)}/>
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <label className="ic-form-label">Prompt Text</label>
+                <textarea className="ic-form-textarea" placeholder="Enter the prompt text…"
+                  value={body} onChange={e => setBody(e.target.value)}/>
+              </div>
+            </div>
+            <div className="ic-modal__foot">
+              <button className="ic-fbtn ic-fbtn--danger"><SbIcon name="trash" size={12}/> Delete</button>
+              <div className="ic-modal__foot-right">
+                <button className="ic-fbtn"><SbIcon name="plus" size={12} stroke={2.2}/> New</button>
+                <button className="ic-fbtn ic-fbtn--primary"><SbIcon name="check" size={12} stroke={2.4}/> Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* =========== APP =========== */
+const App = () => {
+  const [activeNav, setActiveNav] = React.useState('studio');
+  const [promptOpen, setPromptOpen] = React.useState(true);
+  const [controlsOpen, setControlsOpen] = React.useState(true);
+  const [prompt, setPrompt] = React.useState(
+`A wide cinematic shot of a lone figure standing in front of a grand neoclassical building at dusk.
+
+Overhead storm clouds part to reveal soft golden light spilling across the steps.
+
+Realistic photo, professional, 8K, film grain, natural lighting.`
+  );
+  const [count, setCount] = React.useState(1);
+  const [modalOpen, setModalOpen] = React.useState(false);
+
+  const [vals, setVals] = React.useState({
+    genre: 'film photography',
+    skinColor: 'Sun-kissed', quality: 'high-key lighting, soft',
+    ethnicity: 'Caucasian', hairColor: 'Jet black', bodyBuild: 'Extremely thin, b…',
+    size: '1920 × 1080 · HD · 16:9 · 2.1 MP', workflow: '/all',
+  });
+  const [random, setRandom] = React.useState({
+    skinColor: true, quality: true, hairColor: true, bodyBuild: true,
+  });
+  const set = (k, v) => setVals(s => ({ ...s, [k]: v }));
+  const toggleRandom = k => setRandom(s => ({ ...s, [k]: !s[k] }));
+
+  const opts = {
+    genre: ['film photography', 'digital photo', 'oil painting', '3D render', 'illustration'],
+    col: ['urban', 'nature', 'studio', 'abstract'],
+    scenery: ['mountain', 'coastal', 'desert', 'forest', 'cityscape'],
+    lighting: ['natural', 'studio', 'cinematic', 'harsh'],
+    qualityOpts: ['high-key lighting, soft', 'low-key', 'chiaroscuro', 'flat'],
+    weather: ['clear', 'overcast', 'storm', 'fog'],
+    colour: ['warm', 'cool', 'muted', 'vivid'],
+    ethnicity: ['Caucasian', 'East Asian', 'South Asian', 'African', 'Latinx', 'Mixed'],
+    skinColor: ['Fair', 'Light', 'Sun-kissed', 'Olive', 'Deep', 'Dark'],
+    hairColor: ['Jet black', 'Dark brown', 'Chestnut', 'Blonde', 'Red', 'Silver'],
+    bodyBuild: ['Extremely thin, b…', 'Athletic', 'Average', 'Muscular', 'Heavyset'],
+    generic: ['—', 'Option A', 'Option B', 'Option C'],
+  };
+
+  const randomCount = Object.values(random).filter(Boolean).length;
+
+  return (
+    <div className="app">
+      <div className="topbar">
+        <div className="topbar__left">
+          <ProjectDropdown
+            projects={['real-arcade v2', 'mvl-arcade-v2', 'Nocturne · music video', 'Ember campaign · Q2', 'Brand reel 2026']}
+            defaultIdx={0}/>
+        </div>
+        <TopNav active={activeNav} onChange={setActiveNav}/>
+        <div className="topbar__right">
+          <button className="ic-saveto">
+            <span className="ic-saveto__spark"><SbIcon name="spark" size={13}/></span>
+            <span className="ic-saveto__label">Save to</span>
+            <span className="ic-saveto__value">real-arcade v…</span>
+            <SbIcon name="chevDown" size={13}/>
+          </button>
+        </div>
+      </div>
+
+      <div className="ic-main">
+
+        {/* ==================== PROMPT PANEL ==================== */}
+        <aside className={`ic-panel ic-panel--prompt ${promptOpen ? '' : 'is-collapsed'}`}>
+          <div className="ic-panel__inner">
+            <div className="ic-panel__head">
+              <span className="ic-panel__title"><SbIcon name="edit" size={12}/> Prompt</span>
+            </div>
+            <div className="ic-panel__scroll">
+              <div className="ic-prompt-wrap">
+                <textarea className="ic-prompt"
+                  value={prompt}
+                  onChange={e => setPrompt(e.target.value)}
+                  placeholder="Describe the image…"/>
+                <button className="ic-prompt-shuffle" title="Regenerate prompt"><SbIcon name="wand" size={13}/></button>
+                <span className="ic-prompt-count">{prompt.length}</span>
+              </div>
+              <div className="ic-btn-row">
+                <button className="ic-mini-btn" onClick={() => setModalOpen(true)}>
+                  <SbIcon name="folder" size={12}/> Prompts
+                </button>
+                <button className="ic-mini-btn ic-mini-btn--mint">
+                  <SbIcon name="download" size={12}/> Save
+                </button>
+              </div>
+            </div>
+            <div className="ic-panel__foot">
+              <div className="ic-dim-row">
+                <Select mono up
+                  options={[
+                    '1920 × 1080 · HD · 16:9 · 2.1 MP',
+                    '1024 × 1024 · 1:1 · 1.0 MP',
+                    '1536 × 1024 · 3:2 · 1.6 MP',
+                    '1080 × 1920 · 9:16 · 2.1 MP',
+                  ]}
+                  value={vals.size}
+                  onChange={v => set('size', v)}/>
+                <div className="ic-count">
+                  <input type="number" min={1} max={9} value={count}
+                    onChange={e => setCount(Math.max(1, Math.min(9, Number(e.target.value) || 1)))}/>
+                  <div className="ic-count__steps">
+                    <button onClick={() => setCount(c => Math.min(9, c+1))}><SbIcon name="chevDown" size={9} stroke={2.4}/></button>
+                    <button onClick={() => setCount(c => Math.max(1, c-1))}><SbIcon name="chevDown" size={9} stroke={2.4}/></button>
+                  </div>
+                </div>
+              </div>
+              <div className="ic-labelled">
+                <span className="ic-labelled__label">Workflow</span>
+                <Select up
+                  options={['/all', '/portrait', '/scene', '/product', '/concept']}
+                  value={vals.workflow}
+                  onChange={v => set('workflow', v)}/>
+              </div>
+              <button className="ic-create"><SbIcon name="spark" size={15}/> Create</button>
+            </div>
+          </div>
+          <button className="ic-chev" title={promptOpen ? 'Collapse prompt' : 'Expand prompt'} onClick={() => setPromptOpen(o => !o)}>
+            <SbIcon name="chevLeft" size={12}/>
+          </button>
+        </aside>
+
+        {/* ==================== CONTROLS PANEL ==================== */}
+        <aside className={`ic-panel ic-panel--controls ${controlsOpen ? '' : 'is-collapsed'}`}>
+          <div className="ic-panel__inner">
+            <div className="ic-panel__head">
+              <span className="ic-panel__title"><SbIcon name="settings" size={12}/> Controls</span>
+            </div>
+            <div className="ic-panel__scroll">
+              {randomCount > 0 && (
+                <div className="ic-preset-chip">
+                  <SbIcon name="spark" size={11}/>
+                  <span>{randomCount} fields randomized</span>
+                  <button className="ic-preset-chip__x" onClick={() => setRandom({})}>
+                    <SbIcon name="x" size={9} stroke={2.4}/>
+                  </button>
+                </div>
+              )}
+
+              <SubGroup title="Qualities" icon="spark" variant="qualities">
+                <Ctrl label="Genre" value={vals.genre} options={opts.genre}
+                  onChange={v => set('genre', v)}
+                  random={random.genre} onToggleRandom={() => toggleRandom('genre')}/>
+              </SubGroup>
+
+              <SubGroup title="Scene" icon="image" variant="scene">
+                <div className="ic-ctrl-grid">
+                  <Ctrl label="Background col" value={vals.backgroundCol} options={opts.col}
+                    onChange={v => set('backgroundCol', v)}
+                    random={random.backgroundCol} onToggleRandom={() => toggleRandom('backgroundCol')}/>
+                  <Ctrl label="Indoor" value={vals.indoor} options={opts.generic}
+                    onChange={v => set('indoor', v)}
+                    random={random.indoor} onToggleRandom={() => toggleRandom('indoor')}/>
+                  <Ctrl label="Outdoor scenery" value={vals.outdoorScenery} options={opts.scenery}
+                    onChange={v => set('outdoorScenery', v)}
+                    random={random.outdoorScenery} onToggleRandom={() => toggleRandom('outdoorScenery')}/>
+                  <Ctrl label="Interior" value={vals.interior} options={opts.generic}
+                    onChange={v => set('interior', v)}
+                    random={random.interior} onToggleRandom={() => toggleRandom('interior')}/>
+                </div>
+              </SubGroup>
+
+              <SubGroup title="Lighting" icon="spark" variant="lighting">
+                <div className="ic-ctrl-grid">
+                  <Ctrl label="Natural light" value={vals.naturalLight} options={opts.lighting}
+                    onChange={v => set('naturalLight', v)}
+                    random={random.naturalLight} onToggleRandom={() => toggleRandom('naturalLight')}/>
+                  <Ctrl label="Quality" value={vals.quality} options={opts.qualityOpts}
+                    onChange={v => set('quality', v)}
+                    random={random.quality} onToggleRandom={() => toggleRandom('quality')}/>
+                  <Ctrl label="Weather" value={vals.weather} options={opts.weather}
+                    onChange={v => set('weather', v)}
+                    random={random.weather} onToggleRandom={() => toggleRandom('weather')}/>
+                  <Ctrl label="Colour" value={vals.colour} options={opts.colour}
+                    onChange={v => set('colour', v)}
+                    random={random.colour} onToggleRandom={() => toggleRandom('colour')}/>
+                </div>
+              </SubGroup>
+
+              <SubGroup title="Person 1" icon="user" variant="person">
+                <div className="ic-ctrl-grid">
+                  <Ctrl label="Ethnicity" value={vals.ethnicity} options={opts.ethnicity}
+                    onChange={v => set('ethnicity', v)}
+                    random={random.ethnicity} onToggleRandom={() => toggleRandom('ethnicity')}/>
+                  <Ctrl label="Skin color" value={vals.skinColor} options={opts.skinColor}
+                    onChange={v => set('skinColor', v)}
+                    random={random.skinColor} onToggleRandom={() => toggleRandom('skinColor')}/>
+                  <Ctrl label="Hair color" value={vals.hairColor} options={opts.hairColor}
+                    onChange={v => set('hairColor', v)}
+                    random={random.hairColor} onToggleRandom={() => toggleRandom('hairColor')}/>
+                  <Ctrl label="Body build" value={vals.bodyBuild} options={opts.bodyBuild}
+                    onChange={v => set('bodyBuild', v)}
+                    random={random.bodyBuild} onToggleRandom={() => toggleRandom('bodyBuild')}/>
+                </div>
+                <button className="ic-add-person"><SbIcon name="plus" size={12} stroke={2.2}/> Add Person</button>
+              </SubGroup>
+            </div>
+          </div>
+          <button className="ic-chev" title={controlsOpen ? 'Collapse controls' : 'Expand controls'} onClick={() => setControlsOpen(o => !o)}>
+            <SbIcon name="chevLeft" size={12}/>
+          </button>
+        </aside>
+
+        {/* ==================== CANVAS ==================== */}
+        <section className="ic-canvas">
+          <div className="ic-canvas-head">
+            <span className="ic-canvas-kicker"><b>3</b> images generated</span>
+            <button className="ic-clear"><SbIcon name="trash" size={13}/> Clear</button>
+          </div>
+          <div className="ic-results">
+            {[1, 3, 7].map((elapsed, i) => (
+              <div key={i} className="ic-tile ic-tile--loading">
+                <Spinner/>
+                <div className="ic-elapsed">
+                  <SbIcon name="bell" size={11}/>
+                  <span>{elapsed}s</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <PromptManager open={modalOpen} onClose={() => setModalOpen(false)}/>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+

@@ -1,0 +1,104 @@
+/**
+ * Incognito (dark) neumorphic theme.
+ *
+ * Activated via `html[data-mode="incognito"]` — set server-side in layout.tsx
+ * from APP_MODE, and reaffirmed client-side by Navigation from the backend config.
+ *
+ * This is a pure token override of neumorphic-tokens.css: surfaces, shadow tones,
+ * ink, accents, and gradients. Because the elevation recipes (--e-raised*,
+ * --e-pressed*) and most components reference these variables, the entire
+ * neumorphic system re-skins to dark with no per-component changes. Component
+ * spot-fixes for hardcoded light colors live at the bottom of this file.
+ */
+
+html[data-mode="incognito"] {
+  /* === Surfaces — dark slate === */
+  --surface-0: #1C1F25;       /* Deepest panel base / canvas backdrop */
+  --surface-1: #23272E;       /* Body bg — main neumorphic canvas */
+  --surface-2: #282D35;       /* Slightly raised */
+  --surface-3: #2F353E;       /* Raised — modals, popovers */
+  --surface-sunken: #191C21;  /* Recessed wells, slider tracks */
+
+  /* === Shadow tones ===
+     In dark neumorphism the "light" highlight is a lifted gray (not white),
+     and the dark shadow is near-black. */
+  --shadow-light: #2F353E;
+  --shadow-dark:  #14171B;
+  --shadow-darker:#0C0E11;
+
+  /* === Ink (text + icons) — light on dark === */
+  --ink-900: #EDF0F5;
+  --ink-700: #C9D0DA;
+  --ink-500: #939DAC;
+  --ink-400: #79828F;
+  --ink-300: #5C6470;
+  --ink-200: #3C434E;
+
+  /* === Accent gradient chips — slightly brightened for dark contrast === */
+  --accent-blue:      #4C86FF;
+  --accent-blue-deep: #2A5FE6;
+  --accent-blue-soft: #7FA3FF;
+  --accent-coral:     #FF7A6B;
+  --accent-violet:    #9B80FF;
+  --accent-mint:      #34DBB0;
+  --accent-amber:     #FFC062;
+  --accent-rose:      #FF6791;
+
+  /* === Semantic === */
+  --success: #36C98A;
+  --warning: #FFC062;
+  --danger:  #FF6B68;
+
+  /* === Pre-baked gradients === */
+  --grad-primary:     linear-gradient(#4C86FF, #2A5FE6);
+  --grad-primary-160: linear-gradient(160deg, #5A90FF, #2A5FE6);
+  --grad-danger:      linear-gradient(#FF8A88, #E0413E);
+  --grad-multistop:   linear-gradient(90deg, #4C86FF 0%, #9B80FF 50%, #FF7A6B 100%);
+  --grad-progress:    linear-gradient(90deg, #4C86FF, #7FA3FF);
+  --grad-knob:        linear-gradient(145deg, #363C46, #21252C);
+  --grad-nav-active:  linear-gradient(165deg, #3A78FF, #1D4FDB);
+}
+
+/* ===== Tailwind compat-layer retoning for dark =====
+   The light theme used near-black hairline borders (rgba(0,0,0,...)) which
+   vanish on dark surfaces. Re-tone them to faint white hairlines. */
+html[data-mode="incognito"] .border-zinc-600 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+html[data-mode="incognito"] .hover\:border-zinc-600:hover,
+html[data-mode="incognito"] .hover\:border-zinc-700:hover {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+/* Translucent dark scrims read fine, just deepen slightly for dark canvas. */
+html[data-mode="incognito"] .bg-zinc-950\/80,
+html[data-mode="incognito"] .bg-zinc-900\/80,
+html[data-mode="incognito"] .bg-black\/80,
+html[data-mode="incognito"] .bg-black\/70,
+html[data-mode="incognito"] .bg-black\/60,
+html[data-mode="incognito"] .bg-black\/50 {
+  background-color: rgba(8, 10, 14, 0.55) !important;
+}
+
+/* ===== Component spot-fixes (hardcoded light colors) =====
+   Most knobs use var(--grad-knob) which is overridden above. Additional
+   per-component fixes for elements with hardcoded light values are appended
+   here as they are discovered during the per-page screenshot pass. */
+
+/* Claude terminal: the xterm container + active tab hardcode the light
+   surface (#F1F4F8). Re-tone to the sunken dark surface so the terminal pane
+   matches the dark xterm theme (set in useClaudeTerminal getTerminalTheme). */
+html[data-mode="incognito"] [class*="TerminalView_pane"] {
+  background: var(--surface-sunken) !important;
+}
+html[data-mode="incognito"] [class*="ProjectTerminalCard_tabActive"] {
+  background: var(--surface-3) !important;
+}
+
+/* Slider thumbs / toggle knobs hardcoded as white→light-gray gradients in the
+   video editor (global classes) and Create Video modal (CSS module). Re-skin to
+   the dark knob gradient so they don't glow white on dark surfaces. */
+html[data-mode="incognito"] .ve-slider__thumb,
+html[data-mode="incognito"] .toggle__knob,
+html[data-mode="incognito"] [class*="CreateVideoModal_toggleKnob"] {
+  background: var(--grad-knob) !important;
+}

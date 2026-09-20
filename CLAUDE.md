@@ -1,0 +1,177 @@
+# Working on black-rainbow-labs-rux
+
+Read this before changing anything. It records the conventions the code already follows, so that a
+later change looks like the rest of the code rather than like a second style laid over it.
+
+`tasks/task-2008-rux-tdd.md` is the design and records what was weighed and refused. `reference/` is
+what the whole thing is measured against.
+
+## The reference is a dependency, not a folder somebody once looked at
+
+`reference/` holds the stylesheets and source this library was transcribed from:
+`image-creator.css`, `image-creator-page.jsx.html`, `shared-components.jsx`,
+`neumorphic-tokens.css` and `incognito-theme.css`.
+
+**`crates/rux/tests/reference.rs` reads those files at test time and parses them.** Every colour in
+both themes, every radius, every shadow's offsets and blur, the padding and gap of every component
+the design names, the whole type scale and every icon name is compared against the declaration it
+came from. So:
+
+- **A number in this library comes from a declaration, and the comment beside it names the rule.**
+  `// `.ic-count { width: 66px }`` is not decoration; it is how the next reader checks the number.
+- **Changing a token means changing the reference or the test fails**, which is the right way round:
+  the stylesheet is the source of truth and the library is a transcription of it.
+- **Do not "improve" a measurement.** If a padding looks wrong, the reference is wrong and the fix is
+  a conversation, not a nudge.
+
+## The three rules every component keeps
+
+1. **A component decides nothing about the application.** It draws, and it answers what happened.
+   State that has to survive a frame is the caller's, passed in by `&mut`. That is what lets the same
+   component appear twice on one screen, and it is why `Select` takes a `&mut SelectState` rather than
+   keeping one.
+2. **A component reads the theme and never a colour.** There is no `Color32::from_rgb` anywhere in
+   `components/`. A name the theme has not got is a name the theme should gain — which means a change
+   to `Theme`, to both themes, and to `reference.rs`, in one commit.
+3. **A component sets the cursor the stylesheet sets.** `cursor: pointer` is
+   `CursorIcon::PointingHand`, `cursor: text` is `CursorIcon::Text`, `cursor: grab` is
+   `CursorIcon::Grab`.
+
+And the shape is always the same:
+
+```rust
+fn measure(&self, rux: &Rux) -> Vec2;                 // what it wants, before anybody places it
+fn show(self, rux: &mut Rux, rect: Rect) -> Response; // draws into the rect it is given
+```
+
+## A theme says what a name means; it cannot add a name
+
+The token list in `theme/tokens.rs` is closed, and that is the whole design: `incognito-theme.css`
+re-skins the entire ai-service interface by overriding values and **changing no rule at all**, and
+this library keeps that property. `the_dark_theme_changes_no_recipe_at_all` is the test — both themes
+must declare identically shaped elevations and identical gradient angles.
+
+So there is no per-theme branch in `components/`, and there must never be one. `Theme::dark` is read
+in exactly one place, `Tile`, and only to decide the ink drawn over a dropzone that is dark in both.
+
+## What goes in the canvas, and what does not
+
+The decoration is **one `vello_cpu` texture per layer**, painted into a slot reserved before any
+widget. `Canvas::texture_for` compares the whole `Decor` list against the one the current texture was
+made from, so a frame where the list is identical costs a comparison and nothing else.
+
+That gives one rule, and it is the most important rule in the repository:
+
+> **Anything that changes every frame must not reach the `Decor` list.**
+
+Three things follow, each measured rather than assumed:
+
+- **An icon is a tinted texture**, rasterised once per (mark, size, stroke, density) into an alpha
+  mask. The reference changes an icon's colour on hover in nineteen rules; as decoration, every one of
+  those would rasterise the whole layer.
+- **The spinner's arc is a texture too, turned by rotating four vertices.** As a `Decor::Arc` whose
+  angle moved every frame, a page with three spinners on it cost **822 ms of processor time a
+  second** — most of a core to draw three circles. As a texture it is 253 ms/s with the canvas
+  rasterised **once**, and the rest is egui's own pass.
+- **A flat fill with no shadow is drawn by `egui`.** Every hover wash in the reference is one of
+  these, so moving the pointer down a menu rasterises nothing.
+
+What legitimately does rasterise again: a `:active` press, a menu opening, a scroll, a resize, a
+theme change.
+
+### And the ground goes **into** the chrome, not onto the painter
+
+`Rux::ground` records a `Decor::Rect`. It looks like it should be a `rect_filled` and it must not be:
+the decoration's texture is filled into a slot reserved *before* any widget is added, so anything
+painted with `egui` lands on top of it — and a ground painted over the decoration hides every shadow
+in the layer. It looks exactly like the renderer not working, which is how it was found.
+
+## Every popup is its own layer
+
+`egui` draws foreground areas on layers the parent's painter cannot reach, and `Painter::set` writes
+to the layer its own painter belongs to. So a dropdown menu, a context menu and a modal each open an
+`egui::Area` and call `render::layer` inside it — `Rux::overlay` is that, and it is the ordinary path
+rather than a special case.
+
+## An elevation is a CSS box-shadow
+
+Not an approximation of one. Four conversions and nothing else:
+
+- **blur radius → standard deviation is `R / 2`**, because CSS defines the radius as twice the
+  Gaussian's standard deviation;
+- **spread expands the shape before the blur**;
+- **the list is replayed in reverse**, because CSS paints the first shadow in a declaration on top;
+- **an inset shadow is clipped to the border box**, because `fill_blurred_rounded_rect`'s inverted
+  form paints the *complement* of the blur and an unclipped well washes its colour across the layer.
+
+And one optimisation that is only sound when it is checked: an outer shadow is cut to the band around
+its own shape **only when the fill is opaque**, because a translucent surface really does show its
+own shadow through itself.
+
+## The version of `vello_cpu` is epaint's, and `multithreading` stays off
+
+`epaint` 0.36 already depends on `vello_cpu` 0.1 to rasterise the glyphs in its own atlas, so this
+uses the copy that is already in the build; asking for 0.2 would put a second renderer in the binary.
+Follow epaint when egui is next upgraded.
+
+Cargo features are additive across the whole graph, so enabling `multithreading` changes
+`RenderSettings::default()` for epaint too — and epaint's glyph rasteriser never calls `flush()`,
+which the multithreaded dispatcher requires. Measured in Unluminous: every draw panicked with
+"attempted to rasterize before flushing", from egui's own text.
+
+## Weight is a face, not an axis
+
+`ab_glyph` has no variable-font axes, so seven static faces are registered, one per weight. A weight
+the library does not vendor falls back to the heaviest it has, and `family_name` says so rather than
+doing it silently.
+
+`letter-spacing` and `line-height` are carried through. CSS gives `em` and `epaint` takes points, so
+the conversion is `em × size` — and without it a 9.5px mono kicker at `0.14em` is a different design.
+
+## The icon path data is verbatim
+
+An icon redrawn from a recollection of what it looked like is a drawing of something else wearing the
+right name. `icon/paths.rs` holds the `d` strings exactly as `SbIcon` has them, and
+`every_icon_s_path_data_parses` and `every_mark_stays_inside_its_own_view_box` are what keep a
+transcription error from being a smudge nobody notices.
+
+**A mark is judged at both sizes or it is not judged.** The storybook's icon sheet draws every mark at
+24 points *and* at 13 — the size it is really drawn at inside a control — because a sheet at three
+times life size hides exactly the faults that matter.
+
+## Driving the window never takes the keyboard
+
+`--background` opens without taking the foreground, `--story` and `--filter` reach any state, and
+`--open` opens the dropdowns and the dialog. Between them a capture pass needs **no synthetic input at
+all**, which matters on Windows: activating a window switches the virtual desktop with it and takes
+the keyboard out of whatever the person was typing into.
+
+`tools/capture-window.ps1` is `PrintWindow` with `PW_RENDERFULLCONTENT`, so it photographs a window
+that is behind another one or has never been activated. `tools/capture-stories.ps1` walks every story
+in both themes. Screenshots go under `_agent_output/`, which is gitignored.
+
+## Testing
+
+Four layers, and the first three need no graphics card:
+
+1. **`layout`** — the solver, asserted on arithmetic a reader can check.
+2. **`theme` and `reference`** — every token against the file it was transcribed from.
+3. **`render`** — a `Decor` list is a value, so "a raised surface records the stylesheet's two
+   shadows, in the stylesheet's order, at the stylesheet's offsets" is a unit test. So is "an outer
+   shadow is cut to its band only when the fill is opaque" and "a still list does not rasterise
+   again".
+4. **The window** — build it, run it, and look. `pwsh tools/capture-stories.ps1`.
+
+`Canvas::deterministic` and `IconAtlas::deterministic` pin `vello_cpu`'s SIMD level to
+`Level::baseline()`, because the widest level a processor has is not promised to be bit-identical to
+another's — so a picture accepted on one machine would fail on another for a reason that is not a
+fault here.
+
+## Writing
+
+Plain sentences. Say what the code does and why a decision was made, once. Every module has a comment
+at the top saying what it is for, and a decision a reader might disagree with is recorded where it was
+made rather than left to be rediscovered.
+
+British spelling in prose, and the American spelling where a name in the code already uses it, such as
+`color` in `egui`.
