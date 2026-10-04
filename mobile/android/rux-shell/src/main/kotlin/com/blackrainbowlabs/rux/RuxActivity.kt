@@ -75,22 +75,31 @@ open class RuxActivity : GameActivity() {
         setTextInputState(State("", 0, 0, -1, -1))
     }
 
+    /** Whether Rust has somewhere to go back to. Set through `RuxBridge.setHandlesBack`. */
+    private var rustHandlesBack = false
+
     /**
-     * The back gesture goes to Rust while the application says it has somewhere to go back to, and to
-     * Android's default (leave the activity) otherwise. Rust turns this on and off through
-     * `RuxBridge.setHandlesBack`.
+     * The back gesture goes to Rust while the application says it has somewhere to go back to. At the
+     * root it moves the task to the back instead of finishing the activity.
+     *
+     * Finishing is Android's default and it is wrong for a rux application: the Rust side (its threads,
+     * its sockets, its statics) lives as long as the process, and android-activity starts a second
+     * `android_main` beside the first when a destroyed activity is opened again in the same process.
+     * Measured on the emulator: after a back gesture finished the activity, opening the app again left
+     * the splash screen up with nothing drawing. Moving the task to the back keeps the one activity and
+     * the one `android_main`, which is also what an assistant that listens in the background wants.
      */
-    private val backCallback = object : OnBackPressedCallback(false) {
+    private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            RuxBridge.backPressed()
+            if (rustHandlesBack) RuxBridge.backPressed() else moveTaskToBack(true)
         }
     }
 
     /**
-     * Turns the back callback on or off. Called on the UI thread by RuxBridge.
+     * Records whether Rust wants the next back gesture. Called on the UI thread by RuxBridge.
      * @param handles - whether the application wants the next back gesture
      */
     internal fun setBackEnabled(handles: Boolean) {
-        backCallback.isEnabled = handles
+        rustHandlesBack = handles
     }
 }
