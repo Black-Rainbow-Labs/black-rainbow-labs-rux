@@ -42,6 +42,8 @@ pub struct TextInput<'a> {
     pad: Pad,
     enabled: bool,
     label: &'a str,
+    /// A name the caller chose, used for the id instead of the position. See [`TextInput::id_salt`].
+    salt: Option<egui::Id>,
 }
 
 impl<'a> TextInput<'a> {
@@ -56,7 +58,20 @@ impl<'a> TextInput<'a> {
             pad: Pad::axes(12.0, 16.0),
             enabled: true,
             label: "Text",
+            salt: None,
         }
+    }
+
+    /// Names the field so its id survives the field moving.
+    ///
+    /// The id is taken from the field's position by default. On a phone the field moves when the
+    /// keyboard opens (the content is lifted above it), so a position id changes on the frame after the
+    /// tap, egui sees a different widget, focus is lost and the keyboard closes again 16 ms after it
+    /// opened. Measured on the Android emulator with Sable's text field. A field that can move gives a
+    /// name here.
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.salt = Some(egui::Id::new(salt));
+        self
     }
 
     /// `.search-field` — a pill with a magnifier in it, `padding: 0 18px`, 13px.
@@ -148,7 +163,10 @@ impl<'a> TextInput<'a> {
     /// moment the number of widgets above it changes — and a shifting id silently moves the keyboard
     /// to a different field.
     fn id(&self, rux: &Rux<'_>, rect: Rect) -> egui::Id {
-        rux.ui.id().with(("rux-text-input", rect.min.x.to_bits(), rect.min.y.to_bits()))
+        match self.salt {
+            Some(salt) => rux.ui.id().with(("rux-text-input", salt)),
+            None => rux.ui.id().with(("rux-text-input", rect.min.x.to_bits(), rect.min.y.to_bits())),
+        }
     }
 
     fn draw_box(
@@ -222,6 +240,8 @@ pub struct TextArea<'a> {
     style: Style,
     enabled: bool,
     label: &'a str,
+    /// A name the caller chose, used for the id instead of the position. See [`TextInput::id_salt`].
+    salt: Option<egui::Id>,
 }
 
 impl<'a> TextArea<'a> {
@@ -234,7 +254,14 @@ impl<'a> TextArea<'a> {
             style: Style::PROSE,
             enabled: true,
             label: "Text",
+            salt: None,
         }
+    }
+
+    /// Names the area so its id survives it moving, as [`TextInput::id_salt`] does.
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.salt = Some(egui::Id::new(salt));
+        self
     }
 
     pub fn hint(mut self, hint: &'a str) -> Self {
@@ -280,7 +307,10 @@ impl<'a> TextArea<'a> {
             _ => Pad::sides(14.0, 40.0, 28.0, 14.0),
         };
         let body = pad.inside(rect);
-        let id = rux.ui.id().with(("rux-text-area", rect.min.x.to_bits(), rect.min.y.to_bits()));
+        let id = match self.salt {
+            Some(salt) => rux.ui.id().with(("rux-text-area", salt)),
+            None => rux.ui.id().with(("rux-text-area", rect.min.x.to_bits(), rect.min.y.to_bits())),
+        };
         let focused = rux.ui.memory(|memory| memory.has_focus(id));
 
         style_the_box(rux, theme);
