@@ -157,6 +157,29 @@ pub fn set_handles_back(handles: bool) {
     }
 }
 
+/// The last value sent to `setLightBars`: 0 unknown, 1 dark theme, 2 light theme.
+static LIGHT_BARS: AtomicU8 = AtomicU8::new(0);
+
+/// Makes the system bar icons readable on the theme's ground. Only calls JNI on a change.
+/// @param light - true for a light theme
+pub fn set_light_bars(light: bool) {
+    let wanted = if light { 2 } else { 1 };
+    if LIGHT_BARS.swap(wanted, Ordering::Relaxed) == wanted {
+        return;
+    }
+    let Some(class) = BRIDGE.get() else {
+        LIGHT_BARS.store(0, Ordering::Relaxed);
+        return;
+    };
+    let result = with_activity(|env, _| {
+        env.call_static_method(<&JClass>::from(class.as_obj()), "setLightBars", "(Z)V", &[JValue::Bool(light as u8)])?;
+        Ok(())
+    });
+    if result.is_err() {
+        LIGHT_BARS.store(0, Ordering::Relaxed);
+    }
+}
+
 /// `RuxBridge.nativeWake`: Kotlin changed something, so draw a frame.
 extern "system" fn native_wake(_env: JNIEnv, _class: JClass) {
     if let Some(ctx) = CTX.get() {

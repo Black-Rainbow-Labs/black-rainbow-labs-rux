@@ -113,6 +113,21 @@ object RuxBridge {
         mainThread.post { activity.get()?.setBackEnabled(handles) }
     }
 
+    /**
+     * Dark status and navigation bar icons for a light theme, light ones for a dark theme. Rust calls this
+     * when the theme changes; the system bars are drawn over the application's own ground, so their icons
+     * have to follow it.
+     * @param light - true when the theme is light
+     */
+    @JvmStatic fun setLightBars(light: Boolean) {
+        mainThread.post {
+            val owner = activity.get() ?: return@post
+            val controller = androidx.core.view.WindowCompat.getInsetsController(owner.window, owner.window.decorView)
+            controller.isAppearanceLightStatusBars = light
+            controller.isAppearanceLightNavigationBars = light
+        }
+    }
+
     /** Asks Rust for a frame, once Rust is listening. */
     @JvmStatic fun wake() {
         if (nativeReady) nativeWake()

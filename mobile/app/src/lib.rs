@@ -342,6 +342,8 @@ pub struct Shell {
 
 impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "android")]
+        rux_android::set_light_bars(!self.state.theme().dark);
         self.app.ui(ui, &self.state);
         self.state.end_frame();
     }

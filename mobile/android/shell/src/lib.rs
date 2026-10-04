@@ -29,7 +29,7 @@ pub mod keyboard;
 mod options;
 
 #[cfg(target_os = "android")]
-pub use bridge::{install, load_class, set_handles_back, with_activity};
+pub use bridge::{install, load_class, set_handles_back, set_light_bars, with_activity};
 #[cfg(target_os = "android")]
 pub use options::native_options;
 #[cfg(target_os = "android")]
@@ -108,6 +108,11 @@ impl Platform {
         0
     }
 }
+
+/// Off Android there are no system bars to recolour.
+/// @param _light - unused
+#[cfg(not(target_os = "android"))]
+pub fn set_light_bars(_light: bool) {}
 
 /// Off Android, whether the app wants the back gesture is nobody's business.
 /// @param _handles - unused
