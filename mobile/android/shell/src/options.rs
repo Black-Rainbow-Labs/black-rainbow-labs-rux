@@ -33,7 +33,9 @@ pub fn native_options(app: AndroidApp, title: &str) -> eframe::NativeOptions {
         setup.native_adapter_selector = Some(Arc::new(choose_adapter));
         setup.device_descriptor = Arc::new(|adapter| {
             let supported = adapter.limits();
-            let limits = wgpu::Limits::downlevel_defaults().using_resolution(supported.clone());
+            // GLES 3.0 has no compute at all, so a GL adapter gets WebGL 2's limits, as eframe does.
+            let base = if adapter.get_info().backend == wgpu::Backend::Gl { wgpu::Limits::downlevel_webgl2_defaults() } else { wgpu::Limits::downlevel_defaults() };
+            let limits = base.using_resolution(supported.clone());
             wgpu::DeviceDescriptor {
                 label: Some("rux wgpu device"),
                 required_limits: wgpu::Limits { max_texture_dimension_2d: supported.max_texture_dimension_2d.min(8192), ..limits },
