@@ -5,24 +5,25 @@
 
     <application
         android:label="@string/app_name"
-        android:theme="@style/RuxTheme"
-        android:hasCode="false">
+        android:theme="@style/RuxTheme">
 
         <!--
-          `NativeActivity` is the framework's own activity for an application whose whole body is a
-          native library. It needs no Java and no Kotlin and no Maven dependency, which is why it is
-          used here rather than `GameActivity` — and the cost is that `eframe` cannot enable AccessKit
-          with it, so this build has no screen reader support. That is written down in the README beside
-          the reason.
+          `MainActivity` is a `RuxActivity`, which is a `GameActivity`: the Jetpack activity for an
+          application whose body is a native library. It replaced the framework's `NativeActivity` so the
+          application can have a soft keyboard, AccessKit and the real window insets, all three of which
+          need a few lines of Kotlin. `mobile/android/README.md` records the change.
+
+          `adjustNothing`: the keyboard covers the window rather than shrinking it, and `rux` moves the
+          focused field above it using the keyboard height `RuxActivity` reports.
         -->
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".MainActivity"
             android:label="@string/app_name"
-            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|density|uiMode"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout|density|uiMode|smallestScreenSize"
+            android:windowSoftInputMode="adjustNothing"
             android:exported="true">
 
-            <!-- Which library to load. It defaults to `main`; this crate's library is `rux_mobile`, so
-                 the two are made to agree here and in mobile/app/Cargo.toml. -->
+            <!-- Which library to load. GameActivity reads the same meta-data NativeActivity did. -->
             <meta-data android:name="android.app.lib_name" android:value="rux_mobile" />
 
             <intent-filter>

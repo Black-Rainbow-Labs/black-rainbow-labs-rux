@@ -89,6 +89,9 @@ pub struct Mobile {
     /// because a Windows window has no notch to report and the whole point of the preview is to lay out
     /// as though it had one.
     pub forced: Option<Screen>,
+    /// The Android readings egui does not have: insets, the keyboard and the back gesture.
+    #[cfg(target_os = "android")]
+    pub platform: rux_android::Platform,
 }
 
 impl Default for Mobile {
@@ -105,6 +108,8 @@ impl Mobile {
             gallery: Gallery::new(),
             controls: Controls::new(),
             forced: None,
+            #[cfg(target_os = "android")]
+            platform: rux_android::Platform::new(),
         }
     }
 
@@ -124,13 +129,22 @@ impl Mobile {
     /// On a real phone the reading is egui's, with one correction — the pointer is set to `Touch`
     /// outright rather than waiting for `has_touch_screen` to become true, because that only turns true
     /// once a finger has landed and the first frame would otherwise be laid out for a mouse and jump.
-    fn screen(&self, ctx: &egui::Context) -> Screen {
+    ///
+    /// On Android the insets come from `rux-android`, which reads what `RuxActivity` was told by
+    /// `onApplyWindowInsets`; egui has no Android reading of its own. An open keyboard counts as bottom
+    /// inset, so the content above it stays reachable.
+    fn screen(&mut self, ctx: &egui::Context) -> Screen {
         match self.forced {
             Some(screen) => screen,
             None => {
                 let screen = Screen::read(ctx).with_pointer(Pointer::Touch);
                 #[cfg(target_os = "android")]
-                let screen = screen.with_insets(android_insets(ctx, screen.size));
+                let screen = {
+                    let edges = self.platform.screen(ctx);
+                    let mut insets = edges.safe;
+                    insets.bottom = insets.bottom.max(edges.keyboard);
+                    screen.with_insets(insets)
+                };
                 screen
             }
         }
@@ -287,100 +301,34 @@ pub fn run_ios() {
 
 // ------------------------------------------------------------------------------------------- Android
 
-/// The Android entry point.
-///
-/// `android-activity` declares this as `NativeActivity`'s `ANativeActivity_onCreate`, so the name is
-/// not ours to choose. The `AndroidApp` it is handed has to reach `winit`, which is what
-/// `NativeOptions::android_app` is for.
-/// The `AndroidApp` the entry point was handed, kept so the safe area can be read every frame.
-///
-/// A `static` rather than a field, because the screen is read inside [`Mobile::ui`], which the shell
-/// calls through `eframe::App` and cannot hand an extra argument to. `AndroidApp` is `Clone` and
-/// internally reference counted, so keeping one costs nothing and the one in `NativeOptions` is the
-/// same object.
-#[cfg(target_os = "android")]
-static ANDROID_APP: std::sync::OnceLock<winit::platform::android::activity::AndroidApp> =
-    std::sync::OnceLock::new();
-
-/// What the system bars and the display cutout are covering, in points.
-///
-/// **Android reports this differently from iOS, and neither of them through egui.** `egui-winit` has a
-/// `safe_area.rs` that reads `UIWindow.safeAreaInsets`, and it is `#[cfg(target_os = "ios")]` — there is
-/// no Android arm at all, so `InputState::safe_area_insets` is zero on a phone. What Android does have
-/// is `ANativeActivity`'s `onContentRectChanged`, which `android-activity` keeps as
-/// `AndroidApp::content_rect`: the window rectangle with the system bars taken off, in **pixels**. The
-/// difference between that and the whole window is the inset, and dividing by `pixels_per_point` puts it
-/// in the same units the rest of the library works in.
-#[cfg(target_os = "android")]
-fn android_insets(ctx: &egui::Context, size: egui::Vec2) -> Insets {
-    let Some(app) = ANDROID_APP.get() else { return Insets::NONE };
-    let content = app.content_rect();
-    let scale = ctx.pixels_per_point().max(0.01);
-    let window = size * scale;
-    let insets = Insets::new(
-        (content.top as f32).max(0.0) / scale,
-        (window.x - content.right as f32).max(0.0) / scale,
-        (window.y - content.bottom as f32).max(0.0) / scale,
-        (content.left as f32).max(0.0) / scale,
-    );
-    log::debug!(
-        "content rect {:?} in a {:.0}x{:.0} px window at {scale} -> insets {insets:?}",
-        content,
-        window.x,
-        window.y
-    );
-    insets
-}
-
 /// Start the application on Android.
 ///
-/// `mobile/android/glue` is what gives this the `android_main` symbol `NativeActivity` looks for. The
+/// `mobile/android/glue` is what gives this the `android_main` symbol `android-activity` calls. The
 /// `AndroidApp` it is handed has to reach `winit`, which is what `NativeOptions::android_app` is for,
-/// and a clone of it is kept in [`ANDROID_APP`] so the safe area can be read every frame.
+/// and `rux_android::install` keeps a clone so the insets, the keyboard and the back gesture can be read
+/// every frame.
 #[cfg(target_os = "android")]
 pub fn run_android(app: winit::platform::android::activity::AndroidApp) {
     android_logger::init_once(
         android_logger::Config::default().with_max_level(log::LevelFilter::Debug),
     );
-    let _ = ANDROID_APP.set(app.clone());
+    let handle = app.clone();
 
-    let mut options = eframe::NativeOptions {
-        android_app: Some(app),
-        viewport: egui::ViewportBuilder::default().with_title("RUX"),
-        ..Default::default()
-    };
-    quieten_wgpu(&mut options);
+    let options = rux_android::native_options(app, "RUX");
 
     let result = eframe::run_native(
         "rux-mobile",
         options,
-        Box::new(|creation| {
+        Box::new(move |creation| {
+            if let Err(problem) = rux_android::install(&handle, &creation.egui_ctx) {
+                log::error!("rux-android could not reach RuxBridge: {problem}");
+            }
             let (app, state) = start(&creation.egui_ctx, "dark-neumorphic");
             Ok(Box::new(Shell { app, state }))
         }),
     );
     if let Err(problem) = result {
         log::error!("rux-mobile could not start: {problem}");
-    }
-}
-
-/// Turn wgpu's debug instrumentation off, whatever the build profile says.
-///
-/// **The Android emulator's Vulkan driver segfaults on `vkSetDebugUtilsObjectNameEXT`.** wgpu asks for
-/// `InstanceFlags::DEBUG` by itself in any build with `debug_assertions` on, which makes it name every
-/// object it creates — and `vulkan.ranchu.so`, the emulator's passthrough driver, dies inside
-/// `vk_common_SetDebugUtilsObjectNameEXT` the first time it is called. The application had already
-/// loaded, enumerated both adapters and chosen Vulkan on the host's RTX 5090; the whole process then
-/// went down with `SIGSEGV` before the first frame, with nothing in the log naming the cause but the
-/// crashing frame itself.
-///
-/// It only bites a debug build on an emulator, and it costs nothing to avoid: the flags are validation
-/// and object naming, and neither is wanted in an application being handed to somebody to look at.
-#[cfg(target_os = "android")]
-fn quieten_wgpu(options: &mut eframe::NativeOptions) {
-    use eframe::egui_wgpu::{WgpuSetup, wgpu};
-    if let WgpuSetup::CreateNew(setup) = &mut options.wgpu_options.wgpu_setup {
-        setup.instance_descriptor.flags = wgpu::InstanceFlags::empty();
     }
 }
 
@@ -396,5 +344,11 @@ impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.app.ui(ui, &self.state);
         self.state.end_frame();
+    }
+
+    /// On Android, adds the soft keyboard's text to the frame's input, because winit drops it.
+    #[cfg(target_os = "android")]
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.app.platform.raw_input(ctx, raw_input);
     }
 }

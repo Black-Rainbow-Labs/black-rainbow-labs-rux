@@ -1,0 +1,22 @@
+[package]
+name = "rux-android"
+description = "What a rux application needs from Android that egui and winit do not give it: the real window insets, the soft keyboard's text, the back gesture, and a JNI handle on the activity for the application's own Kotlin."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+egui.workspace = true
+rux.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+# `android-activity` uses jni 0.22, whose API is a rewrite. 0.21 is used here because a JNI handle is a raw
+# pointer underneath both, and 0.21's calls are the ones the rest of the Rust Android world documents.
+jni = "0.21"
+log = "0.4"
+winit = { version = "0.30.13", default-features = false, features = ["android-game-activity"] }
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "accesskit", "android-game-activity"] }

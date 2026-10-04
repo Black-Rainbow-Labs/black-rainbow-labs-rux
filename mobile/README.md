@@ -9,6 +9,8 @@ mobile/
   app/            the application — the screens, built from rux components
   ios/            the iOS shell: a bin, a staticlib, Info.plist, and the build that makes an .app
   android/        the Android shell: a cdylib, a Gradle project, and the build that installs it
+  android/shell/  `rux-android`: insets, the soft keyboard and the back gesture for any rux app on Android
+  android/rux-shell/  the Kotlin half of that: `RuxActivity` (a GameActivity) and `RuxBridge`
   preview/        a desktop program that runs the application inside a phone frame, on this machine
 ```
 
@@ -74,16 +76,16 @@ resolved. So:
 | Crate | Crate type | Loaded by |
 |---|---|---|
 | `mobile/app` | `rlib` | the three shells |
-| `mobile/android/glue` | `cdylib` named `rux_mobile` | `NativeActivity`, via `android.app.lib_name` |
+| `mobile/android/glue` | `cdylib` named `rux_mobile` | `GameActivity` (`MainActivity`), via `android.app.lib_name` |
 | `mobile/ios` | `staticlib` named `rux_mobile`, and a `bin` called `RuxMobile` | Xcode, or the bundle |
 | `mobile/preview` | `bin` | nothing: it runs here |
 
 ## What is deliberately missing
 
-- **A software keyboard, on either platform.** egui shows none and winit 0.30 has no API for one;
-  reaching it needs a `UIResponder` on iOS and a JNI call to `InputMethodManager` on Android. The text
-  areas are readable and focusable on a phone and cannot be typed into. This is the largest known gap.
-- **The real window insets on Android**, for the same reason — see `mobile/android/README.md`.
+- **Nothing about the keyboard on iOS beyond what winit does.** winit's own `WinitView` implements
+  `UIKeyInput` and becomes first responder when egui asks for text, so typing works; the field is not yet
+  moved above the keyboard there, because iOS reports the keyboard's height only through notifications.
+  On Android `rux-android` reports the height and the example app treats it as bottom inset (task-2189).
 - **A tablet layout.** `SizeClass::Medium` and `Expanded` are defined and reported, and past the compact
   breakpoint the application keeps a readable column and centres it rather than stretching. A layout that
   genuinely uses a tablet's width is a different design.

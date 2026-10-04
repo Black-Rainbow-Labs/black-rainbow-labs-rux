@@ -8,10 +8,10 @@
 # Three steps, and each one says what it produced:
 #
 #   1. `cargo ndk` cross compiles `mobile/android/glue` — which is `mobile/app` plus the one symbol
-#      `NativeActivity` calls — for each ABI, and drops `librux_mobile.so` into
+#      `android-activity` calls — for each ABI, and drops `librux_mobile.so` into
 #      `app/src/main/jniLibs/<abi>/`.
-#   2. Gradle packages it. There is no Java and no Kotlin in the project, so `compileDebugJavaWithJavac`
-#      reports NO-SOURCE and the APK carries the one native library and the resources.
+#   2. Gradle packages it with the Kotlin shell (`rux-shell`: `RuxActivity` and `RuxBridge`) and the
+#      GameActivity library they extend.
 #   3. `adb` installs it on whatever device or emulator is attached and starts it.
 #
 # The Rust build is a separate step rather than a Gradle task that shells out to cargo, because cargo's
@@ -128,7 +128,7 @@ Write-Output "installing on $Serial"
 & $adb @adbArgs install -r $apk.FullName | Write-Output
 
 $package = 'com.blackrainbowlabs.rux'
-& $adb @adbArgs shell am start -n "$package/android.app.NativeActivity" | Write-Output
+& $adb @adbArgs shell am start -n "$package/.MainActivity" | Write-Output
 
 if ($Capture) {
     # The first frame needs the surface, the swapchain and the font atlas, so it is worth waiting for.
@@ -150,7 +150,7 @@ if ($Capture) {
     }
 
     # And the application's own log, because a crash on the first frame leaves a running-looking screen.
-    $log = & $adb @adbArgs logcat -d -t 400 | Where-Object { $_ -match 'rux|RustStdout|NativeActivity|eframe|wgpu' }
+    $log = & $adb @adbArgs logcat -d -t 400 | Where-Object { $_ -match 'rux|RustStdout|GameActivity|eframe|wgpu' }
     if ($log) {
         Write-Output ''
         Write-Output 'the last thing it said:'

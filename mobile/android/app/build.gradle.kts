@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
@@ -11,10 +12,11 @@ android {
         // `android-activity` 0.6 needs 21, and wgpu's Vulkan backend wants a device that really has
         // Vulkan 1.1 — 28 is the floor that gives both without carrying a fallback path nobody tests.
         minSdk = 28
-        // **34, deliberately.** From 35 Android enforces edge to edge, and a `NativeActivity` cannot
-        // then find out what the system bars are covering without a JNI call on the UI thread — see the
-        // comment in `res/values/themes.xml`, which records what the emulator reported when it was 36.
-        targetSdk = 34
+        // **36.** Android enforces edge to edge from 35, and that used to be a reason to stay on 34: a
+        // `NativeActivity` had no way to learn what the system bars covered. `RuxActivity` now reads the
+        // real insets in `onApplyWindowInsets` and `rux-android` hands them to `rux`, so the application
+        // draws behind the bars and keeps its content clear of them, the way it does on iOS.
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
         ndk {
@@ -40,9 +42,6 @@ android {
         }
     }
 
-    // There is no Java and no Kotlin in this project at all: `NativeActivity` is a framework class and
-    // the whole application is the Rust library. The APK therefore has no `classes.dex`, which is
-    // allowed and is why the build needs no source compatibility settings beyond these.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -51,4 +50,12 @@ android {
     lint {
         abortOnError = false
     }
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+dependencies {
+    implementation(project(":rux-shell"))
 }

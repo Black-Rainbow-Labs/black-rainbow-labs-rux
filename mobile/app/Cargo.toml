@@ -23,18 +23,16 @@ rux.workspace = true
 egui.workspace = true
 
 # ------------------------------------------------------------------------------------------------
-# `eframe` is declared per target rather than inherited from the workspace, and that is not tidiness.
+# `eframe` is declared per target rather than inherited from the workspace.
 #
-# Cargo features are additive across a build, so inheriting the workspace's `eframe` — which has
-# `accesskit` on for the storybook — and then adding `android-native-activity` here gives Android both at
-# once, and `eframe` `compile_error!`s exactly that pair:
+# Android needs `android-game-activity` where every other target needs nothing, and Cargo features are
+# additive, so the Android feature has to be asked for on the Android target only. It used to be
+# `android-native-activity`, which eframe refuses to combine with `accesskit`:
 #
 #     error: `accesskit` feature is only available with `android-game-activity`
 #
-# which is what this build did before the dependency was split. `GameActivity` is the base class that
-# would allow AccessKit, and it needs a Gradle build that fetches `androidx.games:games-activity` from
-# Maven and a Java or Kotlin subclass. `NativeActivity` needs neither, so the Android build is the one
-# that gives up the screen reader — see `mobile/android/README.md`, which says so and why.
+# so the Android build had no screen reader. The shell is now a `GameActivity` (task-2189), and AccessKit is
+# on everywhere.
 # ------------------------------------------------------------------------------------------------
 
 [target.'cfg(not(target_os = "android"))'.dependencies.eframe]
@@ -45,7 +43,7 @@ features = ["wgpu", "default_fonts", "accesskit"]
 [target.'cfg(target_os = "android")'.dependencies.eframe]
 version = "0.36"
 default-features = false
-features = ["wgpu", "default_fonts", "android-native-activity"]
+features = ["wgpu", "default_fonts", "accesskit", "android-game-activity"]
 
 # `winit` is named directly only for the one type `android_main` takes. The version has to be the one
 # `eframe` depends on — cargo unifies them into a single crate, and a mismatch would mean two glue crates
@@ -53,7 +51,10 @@ features = ["wgpu", "default_fonts", "android-native-activity"]
 [target.'cfg(target_os = "android")'.dependencies.winit]
 version = "0.30.13"
 default-features = false
-features = ["android-native-activity"]
+features = ["android-game-activity"]
+
+[target.'cfg(target_os = "android")'.dependencies.rux-android]
+workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies.android_logger]
 version = "0.14"

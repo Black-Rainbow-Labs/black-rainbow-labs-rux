@@ -7,6 +7,7 @@ _agent_output/
 mobile/android/.gradle/
 mobile/android/build/
 mobile/android/app/build/
+mobile/android/rux-shell/build/
 mobile/android/app/src/main/jniLibs/
 
 # An iOS SDK is Apple's and is not redistributed here. `mobile/ios/README.md` says where to get one.
