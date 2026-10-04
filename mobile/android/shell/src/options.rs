@@ -31,6 +31,11 @@ pub fn native_options(app: AndroidApp, title: &str) -> eframe::NativeOptions {
     if let WgpuSetup::CreateNew(setup) = &mut options.wgpu_options.wgpu_setup {
         setup.instance_descriptor.flags = wgpu::InstanceFlags::empty();
         setup.native_adapter_selector = Some(Arc::new(choose_adapter));
+        if !has_hardware_vulkan() {
+            // Only GL, so no Vulkan surface claims the window first: an ANativeWindow takes one producer,
+            // and with both backends on, EGL's create_window_surface answered BadAlloc on the emulator.
+            setup.instance_descriptor.backends = wgpu::Backends::GL;
+        }
         setup.device_descriptor = Arc::new(|adapter| {
             let supported = adapter.limits();
             // GLES 3.0 has no compute at all, so a GL adapter gets WebGL 2's limits, as eframe does.
@@ -54,4 +59,29 @@ fn choose_adapter(adapters: &[wgpu::Adapter], surface: Option<&wgpu::Surface<'_>
     let hardware = usable.iter().find(|a| a.get_info().device_type != wgpu::DeviceType::Cpu);
     let gl = usable.iter().find(|a| a.get_info().backend == wgpu::Backend::Gl);
     hardware.or(gl).or(usable.first()).map(|a| (*a).clone()).ok_or_else(|| "no wgpu adapter can draw to this window".to_owned())
+}
+
+/// Whether a Vulkan adapter backed by real hardware exists. The emulator without its host GPU offers
+/// only SwiftShader, which is a CPU.
+fn has_hardware_vulkan() -> bool {
+    let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+    descriptor.backends = wgpu::Backends::VULKAN;
+    descriptor.flags = wgpu::InstanceFlags::empty();
+    let instance = wgpu::Instance::new(descriptor);
+    let adapters = block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN));
+    adapters.iter().any(|a| a.get_info().device_type != wgpu::DeviceType::Cpu)
+}
+
+/// Runs a future that completes without waiting on anything, which wgpu's native adapter enumeration
+/// does, on this thread.
+/// @param future - the future
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    loop {
+        if let std::task::Poll::Ready(value) = future.as_mut().poll(&mut context) {
+            return value;
+        }
+        std::thread::yield_now();
+    }
 }
