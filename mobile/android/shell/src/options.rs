@@ -16,6 +16,10 @@ use winit::platform::android::activity::AndroidApp;
 ///   allows 16 KiB, so device creation failed with "Limit 'max_uniform_buffer_binding_size' value 65536 is
 ///   better than allowed 16384" and the application exited before its first frame. egui needs none of
 ///   the larger defaults, so the downlevel set is asked for, with the texture size the adapter supports.
+/// - **A hardware adapter first, and GL over Vulkan when everything is software.** With its host GPU
+///   unavailable the emulator offers SwiftShader twice, as Vulkan and as its GLES translator. eframe's
+///   default picks the Vulkan one, which creates a device and a swapchain and then presents nothing: the
+///   screen stayed white with the application running. The GLES translator presents.
 /// @param app - the `AndroidApp` `android_main` was given
 /// @param title - the window title
 pub fn native_options(app: AndroidApp, title: &str) -> eframe::NativeOptions {
@@ -26,6 +30,7 @@ pub fn native_options(app: AndroidApp, title: &str) -> eframe::NativeOptions {
     };
     if let WgpuSetup::CreateNew(setup) = &mut options.wgpu_options.wgpu_setup {
         setup.instance_descriptor.flags = wgpu::InstanceFlags::empty();
+        setup.native_adapter_selector = Some(Arc::new(choose_adapter));
         setup.device_descriptor = Arc::new(|adapter| {
             let supported = adapter.limits();
             let limits = wgpu::Limits::downlevel_defaults().using_resolution(supported.clone());
@@ -37,4 +42,14 @@ pub fn native_options(app: AndroidApp, title: &str) -> eframe::NativeOptions {
         });
     }
     options
+}
+
+/// Picks a hardware adapter the surface supports, else a GL one, else whatever is left.
+/// @param adapters - every adapter wgpu enumerated
+/// @param surface - the window's surface, when there is one yet
+fn choose_adapter(adapters: &[wgpu::Adapter], surface: Option<&wgpu::Surface<'_>>) -> Result<wgpu::Adapter, String> {
+    let usable: Vec<&wgpu::Adapter> = adapters.iter().filter(|a| surface.is_none_or(|s| a.is_surface_supported(s))).collect();
+    let hardware = usable.iter().find(|a| a.get_info().device_type != wgpu::DeviceType::Cpu);
+    let gl = usable.iter().find(|a| a.get_info().backend == wgpu::Backend::Gl);
+    hardware.or(gl).or(usable.first()).map(|a| (*a).clone()).ok_or_else(|| "no wgpu adapter can draw to this window".to_owned())
 }
