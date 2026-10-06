@@ -23,6 +23,24 @@ use egui::Rect;
 
 use crate::{Rux, RuxState};
 
+/// How many pixels one point of `layer` is composited at: the display's own density times the scale of the
+/// transform the layer is drawn through, in quarter steps.
+///
+/// **A layer can be scaled.** Unluminous zooms a modal and its canvas nodes by drawing them into a layer
+/// with a `TSTransform`, and `epaint` applies that to the finished shapes. A decoration or an icon
+/// rasterised at the display's density alone is then a bitmap magnified by the zoom, which reads as a
+/// soft edge on every well and every mark. So the texture is made for the size it is seen at. Quarter
+/// steps rather than the exact number, because a zoom that glides would otherwise make a new texture on
+/// every frame of the glide; rounded up, so the transform only ever shrinks a texture.
+pub fn composited_scale(ctx: &egui::Context, layer: egui::LayerId) -> f32 {
+    let zoom = ctx.layer_transform_to_global(layer).map(|to| to.scaling).unwrap_or(1.0);
+    let zoom = match zoom.is_finite() && zoom > 0.0 {
+        true => ((zoom * 4.0).ceil() / 4.0).clamp(0.25, 4.0),
+        false => 1.0,
+    };
+    ctx.pixels_per_point() * zoom
+}
+
 /// Draw into `ui` with a decoration canvas behind it.
 ///
 /// Reserves the slot, makes a recording [`Chrome`], runs `add`, rasterises what it recorded and fills
@@ -46,7 +64,8 @@ pub fn layer<R>(
     };
     let items = chrome.take();
     if !items.is_empty() {
-        let drawn = state.canvases.borrow_mut().texture_for(painter.ctx(), id, area, &items);
+        let scale = composited_scale(painter.ctx(), painter.layer_id());
+        let drawn = state.canvases.borrow_mut().texture_for(painter.ctx(), id, area, scale, &items);
         if let Some((texture, rect)) = drawn {
             let uv = Rect::from_min_max(egui::Pos2::ZERO, egui::Pos2::new(1.0, 1.0));
             painter.set(slot, egui::Shape::image(texture, rect, uv, egui::Color32::WHITE));

@@ -140,14 +140,17 @@ impl IconAtlas {
     }
 
     /// The texture for this mark at this size, making it if it is not held yet.
+    ///
+    /// `scale` is how many pixels a point is composited at — see `render::composited_scale`.
     fn texture(
         &mut self,
         ctx: &egui::Context,
         icon: Icon,
         size: f32,
         stroke: f32,
+        scale: f32,
     ) -> Option<(egui::TextureId, u16)> {
-        let pixels = (size * ctx.pixels_per_point()).round();
+        let pixels = (size * scale).round();
         if !pixels.is_finite() || pixels < 1.0 || pixels > 512.0 {
             return None;
         }
@@ -234,8 +237,8 @@ impl IconAtlas {
         sweep: f32,
         from: Color32,
         to: Color32,
+        scale: f32,
     ) -> Option<(egui::TextureId, u16)> {
-        let scale = ctx.pixels_per_point();
         let radius_px = (radius * scale).round();
         let stroke_px = (stroke * scale).max(0.5);
         if !radius_px.is_finite() || radius_px < 1.0 || radius_px > 512.0 {
@@ -355,12 +358,13 @@ pub fn paint_arc(
     from: Color32,
     to: Color32,
 ) {
+    let scale = crate::render::composited_scale(painter.ctx(), painter.layer_id());
     let Some((texture, side)) =
-        atlas.arc_texture(painter.ctx(), radius, stroke, sweep, from, to)
+        atlas.arc_texture(painter.ctx(), radius, stroke, sweep, from, to, scale)
     else {
         return;
     };
-    let points = f32::from(side) / painter.ctx().pixels_per_point();
+    let points = f32::from(side) / scale;
     let rect = Rect::from_center_size(centre, Vec2::splat(points));
     let uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
     let mut mesh = Mesh::with_texture(texture);
@@ -433,7 +437,9 @@ pub fn paint(
     centre: Pos2,
     colour: Color32,
 ) {
-    let Some((texture, pixels)) = atlas.texture(painter.ctx(), mark.icon, mark.size, mark.stroke)
+    let scale = crate::render::composited_scale(painter.ctx(), painter.layer_id());
+    let Some((texture, pixels)) =
+        atlas.texture(painter.ctx(), mark.icon, mark.size, mark.stroke, scale)
     else {
         return;
     };

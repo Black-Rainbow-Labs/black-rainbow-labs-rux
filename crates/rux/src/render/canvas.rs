@@ -411,11 +411,15 @@ impl Canvases {
     }
 
     /// Rasterise one layer's decoration and answer the texture to paint and where to paint it.
+    ///
+    /// `pixels_per_point` is what the layer is composited at, which is `render::composited_scale`: the
+    /// display's density, times the zoom of a layer drawn through a transform.
     pub fn texture_for(
         &mut self,
         ctx: &egui::Context,
         id: egui::Id,
         rect: Rect,
+        pixels_per_point: f32,
         items: &[Decor],
     ) -> Option<(egui::TextureId, Rect)> {
         let deterministic = self.deterministic;
@@ -425,7 +429,7 @@ impl Canvases {
             false => Canvas::default(),
         });
         canvas.last_used = frame;
-        canvas.texture_for(ctx, id, rect, ctx.pixels_per_point(), items)
+        canvas.texture_for(ctx, id, rect, pixels_per_point, items)
     }
 
     /// Forget the canvases of layers that were not drawn this frame. Called once, at the end of a frame.

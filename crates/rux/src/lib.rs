@@ -272,6 +272,13 @@ impl<'a> Rux<'a> {
         add: impl FnOnce(&mut Rux<'_>) -> R,
     ) -> R {
         let state = self.state;
+        // **The overlay is drawn through the same transform as the layer it was opened from.** `area` is in
+        // that layer's points, so a dropdown opened inside a zoomed modal or a canvas node would otherwise
+        // be placed in the window's points, somewhere else entirely, and drawn at the wrong size.
+        let ctx = self.ui.ctx().clone();
+        if let Some(to_global) = ctx.layer_transform_to_global(self.ui.layer_id()) {
+            ctx.set_transform_layer(egui::LayerId::new(order, id), to_global);
+        }
         let response = egui::Area::new(id)
             .order(order)
             .fixed_pos(area.min)
