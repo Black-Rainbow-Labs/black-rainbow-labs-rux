@@ -201,7 +201,11 @@ impl<'a> TextInput<'a> {
                     .desired_width(body.width())
                     .font(self.style.font())
                     .text_color(theme.ink.i900)
-                    .hint_text(hint)
+                    // **Given the field's own font.** egui 0.36 lays a hint out as atoms, and an atom with no
+                    // size of its own takes the `Ui`'s Body size rather than the `TextEdit`'s font, so on a
+                    // window whose Body is 24 points the placeholder came out nearly twice the size of what is
+                    // typed into the same box. Unluminous `task-2198`.
+                    .hint_text(egui::RichText::new(hint).font(self.style.font()))
                     .interactive(self.enabled),
             );
         response.widget_info(|| {
@@ -325,7 +329,8 @@ impl<'a> TextArea<'a> {
                 .desired_rows(1)
                 .font(self.style.font())
                 .text_color(theme.ink.i900)
-                .hint_text(hint)
+                // The field's own font, for the reason `TextInput` gives.
+                .hint_text(egui::RichText::new(hint).font(self.style.font()))
                 .interactive(self.enabled),
         );
         response.widget_info(|| {
