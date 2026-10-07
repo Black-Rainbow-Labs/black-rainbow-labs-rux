@@ -300,6 +300,41 @@ pub fn draw_left_centre(painter: &egui::Painter, at: Pos2, galley: Arc<Galley>, 
     painter.galley(Pos2::new(at.x, top.round()), galley, colour);
 }
 
+/// Draw a one line galley with its left edge at `at.x` and its capitals centred on `at.y`.
+///
+/// [`draw_left_centre`] centres the galley's box, and a line box is taller than the letters in it: the
+/// baseline sits the font's ascent from the top and the extra leading is all below. Beside a mark that is
+/// centred on the same point, such as a select's chevron, the words then sit visibly high or low, by an
+/// amount that depends on the face a consumer has bound to the family. The band from the top of a capital
+/// down to the baseline is measured off the same font from an `H`, so every row is placed the same
+/// whatever letters are in it.
+pub fn draw_left_capitals(
+    painter: &egui::Painter,
+    at: Pos2,
+    galley: Arc<Galley>,
+    style: Style,
+    colour: Color32,
+) {
+    let probe = painter.layout_no_wrap("H".to_owned(), style.font(), Color32::WHITE);
+    let top = match capital_band(&probe) {
+        Some((cap, baseline)) => at.y - (cap + baseline) / 2.0,
+        None => at.y - galley.size().y / 2.0,
+    };
+    painter.galley(Pos2::new(at.x, top.round()), galley, colour);
+}
+
+/// From the top of a galley, where its first glyph's ink starts and where its baseline is.
+///
+/// `Glyph::pos` is the baseline relative to its row, and `uv_rect.offset` is where the ink starts relative
+/// to that, which is the sum `epaint`'s own tessellator makes when it places the glyph.
+fn capital_band(galley: &Galley) -> Option<(f32, f32)> {
+    let row = galley.rows.first()?;
+    let glyph = row.row.glyphs.first()?;
+    let baseline = row.pos.y + glyph.pos.y;
+    let cap = baseline + glyph.uv_rect.offset.y;
+    (baseline > cap).then_some((cap, baseline))
+}
+
 /// Draw a galley centred in `rect` on both axes.
 pub fn draw_centred(painter: &egui::Painter, rect: Rect, galley: Arc<Galley>, colour: Color32) {
     let at = rect.center() - galley.size() / 2.0;

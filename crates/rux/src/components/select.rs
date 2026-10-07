@@ -63,6 +63,12 @@ pub struct Select<'a> {
     up: bool,
     enabled: bool,
     label: &'a str,
+    /// How much larger than the stylesheet's sizes it is drawn: its words, its padding, its chevron and
+    /// its menu. A consumer whose pane zooms by a multiplier, rather than through a layer's transform,
+    /// passes the multiplier here so the select grows with what is round it.
+    zoom: f32,
+    /// The menu's shadow, when the consumer wants a quieter one than `--e-raised-lg`.
+    menu_elevation: Option<crate::Elevation>,
 }
 
 impl<'a> Select<'a> {
@@ -75,6 +81,8 @@ impl<'a> Select<'a> {
             up: false,
             enabled: true,
             label: "Select",
+            zoom: 1.0,
+            menu_elevation: None,
         }
     }
 
@@ -99,6 +107,19 @@ impl<'a> Select<'a> {
         self
     }
 
+    /// Draw it this many times the stylesheet's size. See the field.
+    pub fn zoom(mut self, zoom: f32) -> Self {
+        self.zoom = zoom.max(0.1);
+        self
+    }
+
+    /// Give the menu this shadow instead of `--e-raised-lg`, for a consumer whose surfaces sit closer to
+    /// the page than the reference's do.
+    pub fn menu_elevation(mut self, elevation: crate::Elevation) -> Self {
+        self.menu_elevation = Some(elevation);
+        self
+    }
+
     /// What a screen reader calls this control.
     pub fn label(mut self, label: &'a str) -> Self {
         self.label = label;
@@ -106,20 +127,22 @@ impl<'a> Select<'a> {
     }
 
     fn style(&self) -> Style {
-        match self.mono {
+        let style = match self.mono {
             // `.ic-select--mono .ic-select__trigger { font-size: 11px; letter-spacing: 0.01em }`.
             true => Style::mono(11.0).medium().tracking(0.01),
             false => Style::CONTROL,
-        }
+        };
+        style.at(style.size * self.zoom)
     }
 
     /// `padding: 9px 12px` plus the tallest thing in the row.
     pub fn measure(&self, rux: &Rux<'_>) -> Vec2 {
         let value = self.value();
         let words = rux.measure(self.style(), value);
+        let z = self.zoom;
         Vec2::new(
-            words.x + 12.0 * 2.0 + 8.0 + 13.0,
-            rux.screen().target_height((words.y + 9.0 * 2.0).max(34.0)),
+            words.x + (12.0 * 2.0 + 8.0 + 13.0) * z,
+            rux.screen().target_height((words.y + 9.0 * 2.0 * z).max(34.0 * z)),
         )
     }
 
@@ -147,14 +170,15 @@ impl<'a> Select<'a> {
             (false, Visual::Hover | Visual::Active) => theme.elevation.raised,
             _ => theme.elevation.raised_sm,
         };
-        rux.chrome.surface(rect, theme.radius.md, theme.surface.s1, elevation);
+        let z = self.zoom;
+        rux.chrome.surface(rect, theme.radius.md * z, theme.surface.s1, elevation);
 
         let [value, chev] = Flex::row(rect)
-            .pad(Pad::axes(9.0, 12.0))
-            .gap(8.0)
+            .pad(Pad::axes(9.0 * z, 12.0 * z))
+            .gap(8.0 * z)
             .cross(Cross::Centre)
             .fill(1.0)
-            .sized(Vec2::splat(13.0))
+            .sized(Vec2::splat(13.0 * z))
             .solve();
 
         let ink = match self.selected.is_some() {
@@ -164,7 +188,15 @@ impl<'a> Select<'a> {
         }
         .gamma_multiply(visual.fade());
         let galley = rux.elided(self.style(), self.value(), ink, value.width());
-        crate::text::draw_left_centre(rux.ui.painter(), value.left_center(), galley, ink);
+        // **By its capitals**, so the words and the chevron beside them share a middle whatever face the
+        // consumer bound to the family. See [`crate::text::draw_left_capitals`].
+        crate::text::draw_left_capitals(
+            rux.ui.painter(),
+            egui::pos2(value.left(), chev.center().y),
+            galley,
+            self.style(),
+            ink,
+        );
 
         // `.ic-select.is-open .ic-select__chev { transform: rotate(180deg) }`.
         let turn = match state.open {
@@ -172,7 +204,7 @@ impl<'a> Select<'a> {
             false => 0.0,
         };
         rux.mark(
-            Mark::new(Icon::ChevDown, 13.0).stroke(2.0).turn(turn),
+            Mark::new(Icon::ChevDown, 13.0 * z).stroke(2.0 * z).turn(turn),
             chev.center(),
             theme.ink.i500.gamma_multiply(visual.fade()),
         );
@@ -196,6 +228,7 @@ impl<'a> Select<'a> {
         state: &mut SelectState,
         trigger_response: &Response,
     ) -> Option<usize> {
+        let z = self.zoom;
         let row = self.row_height(rux);
         let content = row * self.options.len() as f32;
         let screen_rect = rux.ui.ctx().content_rect();
@@ -209,24 +242,25 @@ impl<'a> Select<'a> {
             true => rux.screen().insets.bottom,
             false => 0.0,
         };
+        let menu_pad = MENU_PAD * z;
         let pad_top = match sheet {
             true => SHEET_GRAB_ROOM,
-            false => MENU_PAD,
+            false => menu_pad,
         };
         let height = match sheet {
-            true => (content + pad_top + MENU_PAD + inset).min(screen_rect.height() * 0.6),
-            false => (content + MENU_PAD * 2.0).min(SELECT_MENU_MAX_HEIGHT),
+            true => (content + pad_top + menu_pad + inset).min(screen_rect.height() * 0.6),
+            false => (content + menu_pad * 2.0).min(SELECT_MENU_MAX_HEIGHT * z),
         };
 
         // `.ic-select--up` when it is asked for, and also when there is no room below — a menu drawn
         // off the bottom of the window is a menu nobody can reach.
-        let below = trigger.bottom() + MENU_OFFSET;
+        let below = trigger.bottom() + MENU_OFFSET * z;
         let upwards = !sheet && (self.up || below + height > screen_rect.bottom());
         let area = match sheet {
             true => super::sheet_frame(screen_rect, height, false),
             false => {
                 let top = match upwards {
-                    true => trigger.top() - MENU_OFFSET - height,
+                    true => trigger.top() - MENU_OFFSET * z - height,
                     false => below,
                 };
                 Rect::from_min_size(
@@ -241,16 +275,18 @@ impl<'a> Select<'a> {
         let selected = self.selected;
         let style = self.style();
         let scroll = &mut state.scroll;
-        let max_scroll = (content + pad_top + MENU_PAD + inset - height).max(0.0);
+        let max_scroll = (content + pad_top + menu_pad + inset - height).max(0.0);
+        let menu_elevation = self.menu_elevation;
 
         let (chosen, pointer_inside) = rux.overlay(id, area, egui::Order::Foreground, |rux| {
             let theme = rux.theme();
             // A sheet is square along the edge it came from. See [`super::Present`].
             let corners = match sheet {
                 true => crate::Corners::top(theme.radius.xl),
-                false => crate::Corners::all(theme.radius.md),
+                false => crate::Corners::all(theme.radius.md * z),
             };
-            rux.chrome.surface(area, corners, theme.surface.s1, theme.elevation.raised_lg);
+            let elevation = menu_elevation.unwrap_or(theme.elevation.raised_lg);
+            rux.chrome.surface(area, corners, theme.surface.s1, elevation);
             if sheet {
                 let grab = Rect::from_center_size(
                     egui::pos2(area.center().x, area.top() + 10.0),
@@ -279,8 +315,8 @@ impl<'a> Select<'a> {
             let mut chosen = None;
             for (index, option) in options.iter().enumerate() {
                 let rect = Rect::from_min_size(
-                    egui::pos2(area.left() + MENU_PAD, area.top() + pad_top + index as f32 * row - *scroll),
-                    Vec2::new(area.width() - MENU_PAD * 2.0, row),
+                    egui::pos2(area.left() + menu_pad, area.top() + pad_top + index as f32 * row - *scroll),
+                    Vec2::new(area.width() - menu_pad * 2.0, row),
                 );
                 if rect.bottom() < area.top() || rect.top() > area.bottom() {
                     continue;
@@ -292,9 +328,9 @@ impl<'a> Select<'a> {
                 // `.ic-select__item.is-selected { background: rgba(47,107,255,0.04) }` and
                 // `:hover { background: rgba(47,107,255,0.06) }`.
                 if hovered {
-                    rux.wash(rect, theme.radius.sm, theme.interaction.accent_wash);
+                    rux.wash(rect, theme.radius.sm * z, theme.interaction.accent_wash);
                 } else if is_selected {
-                    rux.wash(rect, theme.radius.sm, theme.interaction.accent_wash_soft);
+                    rux.wash(rect, theme.radius.sm * z, theme.interaction.accent_wash_soft);
                 }
                 let ink = match is_selected || hovered {
                     true => theme.accent.blue,
@@ -304,18 +340,19 @@ impl<'a> Select<'a> {
                     true => style.medium(),
                     false => style,
                 };
-                let text_rect = Pad::axes(8.0, 12.0).inside(rect);
-                let galley = rux.elided(row_style, option, ink, text_rect.width() - 18.0);
-                crate::text::draw_left_centre(
+                let text_rect = Pad::axes(8.0 * z, 12.0 * z).inside(rect);
+                let galley = rux.elided(row_style, option, ink, text_rect.width() - 18.0 * z);
+                crate::text::draw_left_capitals(
                     rux.ui.painter(),
                     text_rect.left_center(),
                     galley,
+                    row_style,
                     ink,
                 );
                 if is_selected {
                     rux.mark(
-                        Mark::new(Icon::Check, 12.0),
-                        egui::pos2(text_rect.right() - 6.0, rect.center().y),
+                        Mark::new(Icon::Check, 12.0 * z),
+                        egui::pos2(text_rect.right() - 6.0 * z, rect.center().y),
                         theme.accent.blue,
                     );
                 }
@@ -345,6 +382,6 @@ impl<'a> Select<'a> {
 
     /// `.ic-select__item { padding: 8px 12px }` plus the line the words take.
     fn row_height(&self, rux: &Rux<'_>) -> f32 {
-        rux.screen().target_height(rux.measure(self.style(), "Ag").y + 16.0)
+        rux.screen().target_height(rux.measure(self.style(), "Ag").y + 16.0 * self.zoom)
     }
 }

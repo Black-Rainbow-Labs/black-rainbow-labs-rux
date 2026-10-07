@@ -219,3 +219,23 @@ fn a_dialog_draws_as_a_dialog_and_as_a_sheet() {
         });
     }
 }
+
+/// A select drawn at twice the stylesheet's size measures twice as wide and draws, open, with a
+/// quieter menu shadow — what the Unluminous chat pane asks of it when the pane is zoomed.
+#[test]
+fn a_zoomed_select_is_measured_larger_and_draws_open() {
+    drawn(desktop(), "dark-neumorphic", |rux| {
+        let options = vec!["claude".to_owned(), "codex".to_owned()];
+        let plain = Select::new(&options, Some(0)).measure(rux);
+        let zoomed = Select::new(&options, Some(0)).zoom(2.0).measure(rux);
+        assert!(zoomed.x > plain.x * 1.8, "{zoomed:?} against {plain:?}");
+        assert!(zoomed.y > plain.y * 1.8, "{zoomed:?} against {plain:?}");
+        let quiet = rux.theme().elevation.raised_sm;
+        let mut open = SelectState { open: true, scroll: 0.0 };
+        Select::new(&options, Some(0)).zoom(2.0).menu_elevation(quiet).show(
+            rux,
+            Rect::from_min_size(egui::pos2(20.0, 20.0), zoomed),
+            &mut open,
+        );
+    });
+}
