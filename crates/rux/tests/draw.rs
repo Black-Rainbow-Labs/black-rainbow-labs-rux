@@ -239,3 +239,131 @@ fn a_zoomed_select_is_measured_larger_and_draws_open() {
         );
     });
 }
+
+/// The instrument controls `task-2211` added for Unluminous's chat pane, each drawn for real, at the
+/// reference size and zoomed, in both themes, on both screens.
+fn every_instrument(rux: &mut rux::Rux<'_>) {
+    use rux::components::{
+        instrument, Align, Chart, ChartKind, Checkbox, Column, Fader, Item, Key, Meter, Series,
+        Stage, Table, Timeline,
+    };
+    let at = |y: f32, w: f32, h: f32| Rect::from_min_size(egui::pos2(20.0, y), Vec2::new(w, h));
+    let inside = instrument::plate(rux, at(0.0, 360.0, 900.0), 14.0, 14.0);
+    let _ = inside;
+    instrument::screen(rux, at(10.0, 300.0, 60.0), 9.0, true);
+    let blue = rux.theme().accent.blue;
+    let size = Key::new("Make the change").led(blue, true).measure(rux);
+    Key::new("Make the change")
+        .led(blue, true)
+        .show(rux, at(80.0, size.x, size.y));
+    Key::new("main")
+        .down(true)
+        .compact()
+        .show(rux, at(120.0, 80.0, 24.0));
+    let tick = Checkbox::new(true, "Commit the task's own work");
+    let height = tick.height_at(rux, 300.0);
+    tick.show(rux, at(150.0, 300.0, height));
+    Checkbox::new(false, "Run the window suite").show(rux, at(180.0, 300.0, 20.0));
+    let fader = Fader::new(egui::Id::new("fader"), 5.0, 0.0, 12.0).step(0.5);
+    fader.show(rux, at(210.0, 300.0, Fader::height(rux)));
+    Meter::new(0.85)
+        .top(rux.theme().accent.amber)
+        .id(egui::Id::new("meter"))
+        .show(rux, at(250.0, 300.0, Meter::height(rux)));
+    let labels = vec!["core".to_owned(), "app".to_owned(), "cli".to_owned()];
+    let format = |v: f64| format!("{v:.0}");
+    for (index, kind) in [
+        ChartKind::Bar,
+        ChartKind::Line,
+        ChartKind::Area,
+        ChartKind::Donut,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let chart = Chart::new(egui::Id::new(("chart", index)), kind, &labels, &format)
+            .series(Series {
+                name: "last week",
+                values: &[41.0, 81.0, 9.0],
+                colour: blue,
+            })
+            .series(Series {
+                name: "this week",
+                values: &[38.0, 131.0, 9.0],
+                colour: rux.theme().accent.mint,
+            })
+            .stacked(index == 2);
+        let height = chart.height_at(rux, 320.0);
+        chart.show(rux, at(280.0 + index as f32 * 10.0, 320.0, height));
+    }
+    let columns = [
+        Column {
+            label: "Binary",
+            align: Align::Left,
+        },
+        Column {
+            label: "Tests",
+            align: Align::Right,
+        },
+    ];
+    let rows = vec![
+        vec!["canvas_realm".to_owned(), "97".to_owned()],
+        vec!["chat".to_owned(), "142".to_owned()],
+    ];
+    let table = Table::new(egui::Id::new("table"), &columns, &rows).sorted(Some((1, true)));
+    let height = table.height_at(rux, 320.0);
+    table.show(rux, at(600.0, 320.0, height));
+    let items = [
+        Item {
+            time: "09:00",
+            title: "Freeze main",
+            text: "",
+            stage: Stage::Done,
+        },
+        Item {
+            time: "11:30",
+            title: "Run the window suite",
+            text: "483 pictures",
+            stage: Stage::Active,
+        },
+        Item {
+            time: "",
+            title: "Publish",
+            text: "",
+            stage: Stage::Todo,
+        },
+    ];
+    let line = Timeline::new(egui::Id::new("timeline"), &items);
+    let height = line.height_at(rux, 320.0);
+    line.show(rux, at(720.0, 320.0, height));
+}
+
+#[test]
+fn every_instrument_draws_in_both_themes_on_both_screens_and_zoomed() {
+    for theme in ["dark-neumorphic", "light-neumorphic"] {
+        for screen in [desktop(), phone()] {
+            drawn(screen, theme, every_instrument);
+        }
+    }
+    // Zoomed, which is how Unluminous's chat pane draws them at a size other than the reference.
+    let ctx = egui::Context::default();
+    rux::text::install(&ctx);
+    let state = RuxState::new(Theme::named("dark-neumorphic").expect("a theme"));
+    state.set_zoom(1.75);
+    state.set_still(true);
+    let mut input = egui::RawInput::default();
+    input.screen_rect = Some(Rect::from_min_size(
+        egui::pos2(0.0, 0.0),
+        Vec2::new(900.0, 1400.0),
+    ));
+    for _ in 0..2 {
+        let mut output = ctx.run_ui(input.clone(), |ui| {
+            let area = ui.max_rect();
+            rux::layer(ui, &state, egui::Id::new("zoomed"), area, |rux| {
+                assert_eq!(rux.z(10.0), 17.5);
+                every_instrument(rux);
+            });
+        });
+        output.textures_delta.clear();
+    }
+}

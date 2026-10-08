@@ -46,6 +46,9 @@ pub struct Demo {
     pub sizes: Vec<String>,
     pub long: Vec<String>,
     pub projects: Vec<String>,
+    /// The instrument story's fader and checklist, so they can be played with.
+    pub fader: f64,
+    pub ticks: [bool; 3],
     /// The example page, so it keeps its own state while the storybook is used.
     pub image_creator: rux_examples::ImageCreator,
 }
@@ -54,6 +57,8 @@ impl Default for Demo {
     fn default() -> Self {
         Self {
             nav: 3,
+            fader: 300.0,
+            ticks: [true, false, false],
             segmented: 0,
             tabs: 2,
             dice: true,

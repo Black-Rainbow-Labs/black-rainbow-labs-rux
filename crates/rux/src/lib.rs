@@ -86,6 +86,12 @@ pub struct RuxState {
     pub icons: RefCell<IconAtlas>,
     theme: Cell<&'static Theme>,
     screen: Cell<Screen>,
+    /// How much larger than its reference size everything is drawn. Zero means one, so a state built
+    /// with `Default` draws at the reference size.
+    zoom: Cell<f32>,
+    /// Whether controls animate. On unless a consumer turns it off, for a person who asked for less
+    /// motion or for a test that photographs a frame mid gesture.
+    still: Cell<bool>,
 }
 
 impl RuxState {
@@ -95,6 +101,8 @@ impl RuxState {
             icons: RefCell::new(IconAtlas::default()),
             theme: Cell::new(theme),
             screen: Cell::new(Screen::default()),
+            zoom: Cell::new(1.0),
+            still: Cell::new(false),
         }
     }
 
@@ -105,6 +113,8 @@ impl RuxState {
             icons: RefCell::new(IconAtlas::deterministic()),
             theme: Cell::new(theme),
             screen: Cell::new(Screen::default()),
+            zoom: Cell::new(1.0),
+            still: Cell::new(false),
         }
     }
 
@@ -136,6 +146,34 @@ impl RuxState {
     /// than anything having to be invalidated by hand.
     pub fn set_theme(&self, theme: &'static Theme) {
         self.theme.set(theme);
+    }
+
+    /// How much larger than its reference size everything is drawn.
+    ///
+    /// For a consumer whose pane zooms by a multiplier rather than through a layer's transform: a chat
+    /// pane zoomed to 1.5 sets 1.5 here once a frame and every component that reads [`Rux::z`] grows
+    /// with it. A layer drawn through a transform needs nothing here; [`render::composited_scale`]
+    /// already keeps it sharp.
+    pub fn zoom(&self) -> f32 {
+        match self.zoom.get() {
+            zoom if zoom > 0.0 && zoom.is_finite() => zoom,
+            _ => 1.0,
+        }
+    }
+
+    /// Set the zoom, clamped to a tenth at the least.
+    pub fn set_zoom(&self, zoom: f32) {
+        self.zoom.set(zoom.max(0.1));
+    }
+
+    /// Whether controls should jump to where they are going rather than move there.
+    pub fn is_still(&self) -> bool {
+        self.still.get()
+    }
+
+    /// Turn motion off or back on.
+    pub fn set_still(&self, still: bool) {
+        self.still.set(still);
     }
 
     /// Give back the canvases of layers that were not drawn this frame. Called once, at the end.
@@ -188,6 +226,21 @@ impl<'a> Rux<'a> {
     /// The device this is being drawn on. See [`RuxState::screen`].
     pub fn screen(&self) -> Screen {
         self.state.screen()
+    }
+
+    /// The zoom everything is drawn at. See [`RuxState::zoom`].
+    pub fn zoom(&self) -> f32 {
+        self.state.zoom()
+    }
+
+    /// A reference measurement at the current zoom.
+    pub fn z(&self, points: f32) -> f32 {
+        points * self.state.zoom()
+    }
+
+    /// A text style at the current zoom.
+    pub fn zs(&self, style: Style) -> Style {
+        style.at(style.size * self.state.zoom())
     }
 
     pub fn painter(&self) -> &egui::Painter {

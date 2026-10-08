@@ -94,7 +94,154 @@ pub fn stories() -> Vec<Story> {
             tile,
         ),
         story("Modal", ".ic-modal / .ic-modal-backdrop", &["closed", "open", "with footer"], modal),
+        story(
+            "Instruments",
+            "no reference rule: composed from the theme's surfaces, shadows, ink and accents (task-2211)",
+            &["plate", "screen", "led", "key", "checkbox", "fader", "meter", "chart", "table", "timeline"],
+            instruments,
+        ),
     ]
+}
+
+/// The instrument controls Unluminous's chat pane draws an answer's components with.
+fn instruments(rux: &mut Rux<'_>, demo: &mut Demo, area: Rect) -> f32 {
+    use rux::components::instrument;
+    let mut pen = Pen::new(area);
+    note(
+        rux,
+        &mut pen,
+        "Plates with a lit top edge, recessed screens, key caps that sink, LEDs, faders and segmented          meters. Colour is light: a lamp or glowing data, never a filled control.",
+    );
+    let blue = rux.theme().accent.blue;
+    group(rux, &mut pen, "Keys and checkboxes");
+    let rect = wide(
+        rux,
+        &mut pen,
+        30.0,
+        "a key with its lamp lit, a key held down, a plain key",
+    );
+    let first = Key::new("Make the change").led(blue, true);
+    let size = first.measure(rux);
+    first.show(rux, Rect::from_min_size(rect.min, size));
+    let second = Key::new("main").down(true).led(blue, true);
+    let next = Rect::from_min_size(
+        rect.min + Vec2::new(size.x + 10.0, 0.0),
+        second.measure(rux),
+    );
+    second.show(rux, next);
+    let third = Key::new("Open Cargo.toml");
+    let last = Rect::from_min_size(next.right_top() + Vec2::new(10.0, 0.0), third.measure(rux));
+    third.show(rux, last);
+    pen.gap(GROUP_GAP / 2.0);
+    for (index, label) in [
+        "Commit the work",
+        "Run the window suite",
+        "Copy notarize.env",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let rect = pen.strip(20.0);
+        if Checkbox::new(demo.ticks[index], label)
+            .id(egui::Id::new(("story-tick", index)))
+            .show(rux, Rect::from_min_size(rect.min, Vec2::new(320.0, 20.0)))
+            .clicked()
+        {
+            demo.ticks[index] = !demo.ticks[index];
+        }
+        pen.gap(8.0);
+    }
+    pen.gap(GROUP_GAP);
+    group(rux, &mut pen, "Fader and meter");
+    let rect = wide(
+        rux,
+        &mut pen,
+        Fader::height(rux),
+        "drag, press the groove, or use the arrow keys",
+    );
+    let fader = Fader::new(egui::Id::new("story-fader"), demo.fader, 0.0, 2000.0).step(50.0);
+    if let Some(next) = fader
+        .show(
+            rux,
+            Rect::from_min_size(rect.min, Vec2::new(rect.width().min(420.0), rect.height())),
+        )
+        .changed
+    {
+        demo.fader = next;
+    }
+    let rect = wide(
+        rux,
+        &mut pen,
+        Meter::height(rux),
+        "lit to the fader's value",
+    );
+    Meter::new((demo.fader / 2000.0) as f32)
+        .top(rux.theme().accent.amber)
+        .show(
+            rux,
+            Rect::from_min_size(rect.min, Vec2::new(rect.width().min(420.0), rect.height())),
+        );
+    pen.gap(GROUP_GAP);
+    group(rux, &mut pen, "Chart");
+    let labels = vec!["core".to_owned(), "app".to_owned(), "cli".to_owned()];
+    let format = |v: f64| format!("{v:.0}");
+    let chart = Chart::new(
+        egui::Id::new("story-chart"),
+        ChartKind::Bar,
+        &labels,
+        &format,
+    )
+    .series(Series {
+        name: "last week",
+        values: &[41.0, 81.0, 9.0],
+        colour: instrument::Instrument::of(rux.theme()).quiet,
+    })
+    .series(Series {
+        name: "this week",
+        values: &[38.0, 131.0, 9.0],
+        colour: blue,
+    });
+    let height = chart.height_at(rux, 420.0);
+    let rect = wide(
+        rux,
+        &mut pen,
+        height,
+        "segments rise from the baseline the first time a chart is drawn",
+    );
+    chart.show(
+        rux,
+        Rect::from_min_size(rect.min, Vec2::new(rect.width().min(420.0), height)),
+    );
+    pen.gap(GROUP_GAP);
+    group(rux, &mut pen, "Timeline");
+    let items = [
+        Item {
+            time: "09:00",
+            title: "Freeze main",
+            text: "",
+            stage: Stage::Done,
+        },
+        Item {
+            time: "11:30",
+            title: "Run the window suite",
+            text: "483 pictures, about 40 minutes",
+            stage: Stage::Active,
+        },
+        Item {
+            time: "14:00",
+            title: "Publish",
+            text: "",
+            stage: Stage::Todo,
+        },
+    ];
+    let line = Timeline::new(egui::Id::new("story-timeline"), &items);
+    let height = line.height_at(rux, 420.0);
+    let rect = wide(rux, &mut pen, height, "the item in progress breathes");
+    line.show(
+        rux,
+        Rect::from_min_size(rect.min, Vec2::new(420.0_f32.min(rect.width()), height)),
+    );
+    pen.used()
 }
 
 fn story(
