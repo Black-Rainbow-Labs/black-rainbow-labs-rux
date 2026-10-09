@@ -81,6 +81,34 @@ impl Theme {
         ])
     }
 
+    /// This theme with another application's surfaces, ink and accent, and its elevations worked out
+    /// again from them.
+    ///
+    /// For a consumer whose own palette is the truth and whose components have to sit beside its own
+    /// surfaces: Unluminous draws a chat bubble in its theme's card colour, and a `rux` plate drawn beside it
+    /// in `rux`'s grey reads as a second design. Every recipe is unchanged — only values move, which is the
+    /// property [`Theme`] exists to keep. `shadow` is the pair the elevations are made from.
+    pub fn retoned(
+        &self,
+        name: &'static str,
+        surface: Surfaces,
+        shadow: ShadowTones,
+        ink: Ink,
+        blue: Color32,
+    ) -> Theme {
+        let mut theme = *self;
+        theme.name = name;
+        theme.surface = surface;
+        theme.shadow = shadow;
+        theme.ink = ink;
+        theme.accent.blue = blue;
+        theme.interaction.accent_wash = with_opacity(blue, 0.06);
+        theme.interaction.accent_wash_soft = with_opacity(blue, 0.04);
+        theme.interaction.focus_ring = with_opacity(blue, 0.65);
+        theme.elevation = elevations(&theme.shadow, &theme.accent, &theme.gradient);
+        theme
+    }
+
     /// Every theme that ships, in the order the storybook lists them.
     pub fn all() -> &'static [&'static Theme] {
         static ALL: OnceLock<[&'static Theme; 2]> = OnceLock::new();

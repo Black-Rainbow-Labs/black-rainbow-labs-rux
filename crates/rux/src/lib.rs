@@ -251,6 +251,12 @@ impl<'a> Rux<'a> {
         self.ui.ctx()
     }
 
+    /// How many physical pixels one point of this layer covers, which is what a hairline and a mark
+    /// snapped to the pixel grid are measured in.
+    pub fn pixels_per_point(&self) -> f32 {
+        render::composited_scale(self.ctx(), self.painter().layer_id())
+    }
+
     /// Fill a rectangle with the page's own background: `body { background: var(--surface-1) }`.
     ///
     /// **Recorded into the chrome rather than painted with `egui`, and that ordering is the whole

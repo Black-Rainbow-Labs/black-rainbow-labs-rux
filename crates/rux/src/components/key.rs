@@ -22,6 +22,7 @@ pub struct Key<'a> {
     led: Option<Color32>,
     lit: bool,
     down: bool,
+    accent: Option<Color32>,
     enabled: bool,
     id: Option<Id>,
     compact: bool,
@@ -34,6 +35,7 @@ impl<'a> Key<'a> {
             led: None,
             lit: false,
             down: false,
+            accent: None,
             enabled: true,
             id: None,
             compact: false,
@@ -50,6 +52,26 @@ impl<'a> Key<'a> {
     /// Held down, as the chosen key in a row of choices is.
     pub fn down(mut self, down: bool) -> Self {
         self.down = down;
+        self
+    }
+
+    /// The chosen key in a row of choices or a strip of tabs: held down, with its words in `colour`.
+    ///
+    /// The way to say "this one" without an LED beside the words. Unluminous's `task-2219` asked for the
+    /// dots beside a button's label to go, and a key that is down with its label lit says the same thing
+    /// with one mark instead of two.
+    pub fn chosen(mut self, colour: Color32, on: bool) -> Self {
+        self.down = on;
+        if on {
+            self.accent = Some(colour);
+        }
+        self
+    }
+
+    /// Its words in `colour`, which is how the key that matters most in a row is told apart without an
+    /// LED: the primary action, or a key that has done its job.
+    pub fn tinted(mut self, colour: Color32) -> Self {
+        self.accent = Some(colour);
         self
     }
 
@@ -125,10 +147,11 @@ impl<'a> Key<'a> {
                 colours.edge.gamma_multiply(1.0 - sink * 2.0),
             );
         }
-        let ink = match (self.enabled, self.lit || self.down) {
-            (false, _) => theme.ink.i300,
-            (true, true) => theme.ink.i900,
-            (true, false) => theme.ink.i700,
+        let ink = match (self.enabled, self.lit || self.down, self.accent) {
+            (false, _, _) => theme.ink.i300,
+            (true, _, Some(accent)) => accent,
+            (true, true, _) => theme.ink.i900,
+            (true, false, _) => theme.ink.i700,
         };
         let pad = rux.z(if self.compact { 10.0 } else { 13.0 });
         let mut pen = face.left() + pad;
@@ -166,7 +189,7 @@ impl<'a> Key<'a> {
     }
 }
 
-/// A checkbox: a small key cap with an LED in it, down and lit when ticked, with its label beside it.
+/// A checkbox: a small key cap with a tick in it, down when ticked, with its label beside it.
 pub struct Checkbox<'a> {
     on: bool,
     label: &'a str,
@@ -196,7 +219,7 @@ impl<'a> Checkbox<'a> {
         self
     }
 
-    /// The LED's colour when ticked; the theme's mint when left out.
+    /// The tick's colour; the theme's mint when left out.
     pub fn colour(mut self, colour: Color32) -> Self {
         self.colour = Some(colour);
         self
@@ -241,29 +264,31 @@ impl<'a> Checkbox<'a> {
             ),
             Vec2::splat(side),
         );
+        // **A recessed well, ticked or not**, `task-2219`. A raised cap the colour of the plate was nearly
+        // invisible on a light plate: an unticked box was a white key on white with one faint shadow under
+        // it. A well in the screen colour reads as a box on any plate, which is what a person looks for.
         let held = self.on || response.is_pointer_button_down_on();
         let sink = toward(rux, response.id.with("sink"), held, timing::PRESS);
-        let radius = rux.z(6.0);
-        let fill = match response.hovered() && !held {
-            true => theme.surface.s3,
-            false => colours.plate,
+        let radius = rux.z(5.0);
+        let fill = match response.hovered() && !self.on {
+            true => crate::theme::with_opacity(colours.screen, 0.8),
+            false => colours.screen,
         };
-        rux.chrome.surface(
-            cap,
-            radius,
-            Fill::Solid(fill),
-            sinking(theme.elevation.raised_sm, theme.elevation.pressed_sm, sink),
-        );
-        if sink < 0.5 {
-            lit_edge(
-                rux.painter(),
-                cap,
-                radius,
-                colours.edge.gamma_multiply(1.0 - sink * 2.0),
-            );
-        }
+        rux.chrome
+            .surface(cap, radius, Fill::Solid(fill), theme.elevation.pressed_sm);
+        // A tick rather than a lit dot: a tick is what a person reads as "ticked", and a dot inside a key
+        // reads as one more LED. It fades in over the same time the cap sinks.
         let colour = self.colour.unwrap_or(theme.accent.mint);
-        led_for(rux, response.id, cap.center(), rux.z(3.0), colour, self.on);
+        let shown = toward(rux, response.id.with("tick"), self.on, timing::LIGHT);
+        if shown > 0.01 {
+            let at = |x: f32, y: f32| {
+                Pos2::new(cap.left() + cap.width() * x, cap.top() + cap.height() * y + sink * rux.z(1.0))
+            };
+            rux.painter().add(egui::Shape::line(
+                vec![at(0.29, 0.52), at(0.44, 0.67), at(0.72, 0.36)],
+                egui::Stroke::new(rux.z(1.9), colour.gamma_multiply(shown)),
+            ));
+        }
         let ink = match self.on && self.settled {
             true => theme.ink.i400,
             false => theme.ink.i700,
