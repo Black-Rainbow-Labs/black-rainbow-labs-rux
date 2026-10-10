@@ -33,14 +33,16 @@ fn parts(rux: &mut Rux<'_>, _demo: &mut Demo, area: Rect) -> f32 {
          carved into it. Everything pressed is round or a pill, state is an icon in a carved well, \
          and an amount is a dial, a ring or a slider.",
     );
+    // The charts first, because the ticket's check is about them: arcs that do not touch at the joins
+    // and a smallest slice in proportion to its share.
+    group(rux, &mut pen, "Charts");
+    charts(rux, &mut pen);
+    pen.gap(GROUP_GAP);
     group(rux, &mut pen, "Buttons");
     buttons(rux, &mut pen);
     pen.gap(GROUP_GAP);
     group(rux, &mut pen, "Status");
     statuses(rux, &mut pen);
-    pen.gap(GROUP_GAP);
-    group(rux, &mut pen, "Charts");
-    charts(rux, &mut pen);
     pen.gap(GROUP_GAP);
     group(rux, &mut pen, "Cards");
     cards(rux, &mut pen);

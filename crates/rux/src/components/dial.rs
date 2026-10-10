@@ -344,7 +344,8 @@ impl Track {
                 Pos2::new(x - rux.z(1.0), groove.top() - rux.z(3.0)),
                 Vec2::new(rux.z(2.0), rux.z(18.0)),
             );
-            rux.painter().rect_filled(mark, rux.z(1.0), theme.ink.i400.at(0.6));
+            // Into the decoration, under the knob, which is the order the canvas draws them in.
+            rux.chrome.rect(mark, rux.z(1.0), theme.ink.i400.at(0.6));
         }
         if self.knob {
             let centre = Pos2::new((at(fraction) - rux.z(2.0)).max(groove.left() + rux.z(11.0)), groove.center().y);

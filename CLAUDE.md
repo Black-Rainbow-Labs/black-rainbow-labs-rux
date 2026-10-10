@@ -212,3 +212,20 @@ the vertex afterwards. Right picture with assertions off; dead process with them
 Every test here ran the geometry rather than the drawing, and every program that ran was `--release`, so
 nothing had executed that line with assertions on until the Android application's first frame did. If a
 component gains a drawing path, it goes in that file.
+
+## The Agent-Chat parts are the one place the design is not the reference (task-2235)
+
+Unluminous's chat pane is drawn to a Claude Design canvas ("Unluminous", page Agent-Chat), not to
+`reference/`. Its parts live in `components/round.rs`, `status.rs`, `dial.rs` and `cards.rs`, and its values
+are `theme::Chat`. Two rules keep that from becoming a second style:
+
+- **`Chat` is worked out, not transcribed.** `Chat::lit_from(ground, dark)` writes each canvas colour as a
+  step from the canvas's own pane (`#1f232a`), so on that pane it is exactly the canvas's hex and on any
+  other pane it is the same steps. `Theme::retoned` works it out again from the new `surface.s1`. It holds
+  colours only; the shadows are its methods, so both themes still share every recipe.
+- **The design's marks are `Icon::CHAT`, beside `Icon::ALL`.** `ALL` is still exactly `SbIcon`'s set and
+  `tests/reference.rs` still checks it; the chat marks are transcribed from Unluminous's `theme::icon` SVGs
+  and the canvas, and keep their own stroke through `Icon::stroke`.
+
+A slice of a `Ring` too short for two round caps is drawn with square ends at exactly its share, and the
+gap between slices is the same everywhere; `dial::arc_segments` and its tests are that arithmetic.
