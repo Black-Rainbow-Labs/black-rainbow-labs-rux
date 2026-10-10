@@ -367,3 +367,72 @@ fn every_instrument_draws_in_both_themes_on_both_screens_and_zoomed() {
         output.textures_delta.clear();
     }
 }
+
+/// The Agent-Chat design's parts (`task-2235`): every button in every state, the status wells, the
+/// charts and the cards.
+fn every_chat_part(rux: &mut rux::Rux<'_>) {
+    use rux::components::{
+        AreaChart, CodeBlock, CommandCard, Dial, DiffCard, ErrorCard, Line, PermissionCard,
+        PillButton, PillVariant, Ring, RoundButton, RoundSize, Sign, Slice, SlicePaint, Status,
+        StatusWell, Track,
+    };
+    let at = |x: f32, y: f32, w: f32, h: f32| Rect::from_min_size(egui::pos2(x, y), Vec2::new(w, h));
+    rux.ground(at(0.0, 0.0, 1400.0, 900.0));
+    let states = [(false, false, false, true), (true, false, false, true), (false, true, false, true), (false, false, true, true), (false, false, false, false)];
+    for (index, (hovered, held, ring, enabled)) in states.into_iter().enumerate() {
+        let x = 20.0 + index as f32 * 150.0;
+        for (row, variant) in [PillVariant::Primary, PillVariant::Secondary, PillVariant::Ghost].into_iter().enumerate() {
+            let pill = PillButton::new("Apply change").variant(variant).enabled(enabled).showing(hovered, held, ring);
+            let size = pill.measure(rux);
+            pill.show(rux, at(x, 20.0 + row as f32 * 50.0, size.x, size.y));
+        }
+        RoundButton::mark(Icon::Clock, 20.0, "History").enabled(enabled).showing(hovered, held, ring).show(rux, at(x, 170.0, 38.0, 38.0));
+        RoundButton::mark(Icon::Settings, 13.0, "Settings").size(RoundSize::Small).on(held).enabled(enabled).show(rux, at(x, 220.0, 30.0, 30.0));
+        RoundButton::send("Send").enabled(enabled).showing(hovered, held, ring).show(rux, at(x, 260.0, 44.0, 44.0));
+        RoundButton::stop("Stop").show(rux, at(x + 60.0, 260.0, 44.0, 44.0));
+    }
+    for (index, status) in [Status::Waiting, Status::Running, Status::Done, Status::NeedsOk, Status::Failed].into_iter().enumerate() {
+        StatusWell::new(status).show(rux, at(20.0 + index as f32 * 50.0, 320.0, 34.0, 34.0));
+    }
+    let chat = rux.theme().chat;
+    Dial::new(128.0, 50.0).centre("178", " s").caption("+39%", chat.slower).show(rux, at(20.0, 370.0, 150.0, 150.0));
+    Ring::new(vec![Slice::new(131.0, SlicePaint::Action), Slice::new(38.0, SlicePaint::Colour(chat.slices[0])), Slice::new(1.0, SlicePaint::Colour(chat.slices[1]))])
+        .centre("74%", "")
+        .show(rux, at(200.0, 370.0, 150.0, 150.0));
+    Track::new(131.0, 140.0).marker(81.0).show(rux, at(380.0, 380.0, 300.0, 22.0));
+    Track::new(0.0, 140.0).without_knob().show(rux, at(380.0, 420.0, 300.0, 22.0));
+    let days = [119.0, 121.0, 118.0, 124.0, 151.0, 170.0, 178.0];
+    let chart = AreaChart::new(&days).marker(4, "rux added").ends("26 Sep", "9 Oct");
+    let size = chart.measure(rux);
+    chart.show(rux, at(380.0, 460.0, 360.0, size.y));
+    let lines = [Line::plain("cargo build --release").trailing("2m 58s").number("1").sign(Sign::Added)];
+    let card = CommandCard::new("cargo build", "0:47", Status::Running).progress(Some(0.36));
+    let height = card.height(rux);
+    card.show(rux, at(780.0, 20.0, 380.0, height));
+    let card = CommandCard::new("Ran 1 command", "3m", Status::Done).words().lines(&lines, true);
+    let height = card.height(rux);
+    card.show(rux, at(780.0, 120.0, 380.0, height));
+    let card = CodeBlock::new("icon.rs", "Rust", &lines);
+    let height = card.height(rux);
+    card.show(rux, at(780.0, 260.0, 380.0, height));
+    let card = DiffCard::new("icon.rs", "1 line changed", &lines);
+    let height = card.height(rux);
+    card.show(rux, at(780.0, 400.0, 380.0, height));
+    let card = PermissionCard::new("claude wants to run a command", "It changes Cargo.lock", &lines);
+    let height = card.height(rux);
+    card.show(rux, at(780.0, 560.0, 380.0, height));
+    let models = vec!["claude".to_owned(), "codex".to_owned(), "local qwen 27B".to_owned()];
+    rux::components::PillSwitch::new(&models, Some(1), "Model").show(rux, at(20.0, 560.0, 380.0, 46.0));
+    let card = ErrorCard::new("cargo exited with code 101", "cargo build", &lines);
+    let height = card.height(rux);
+    card.show(rux, at(780.0, 720.0, 380.0, height));
+}
+
+#[test]
+fn every_chat_part_draws_in_both_themes_on_both_screens() {
+    for theme in ["dark-neumorphic", "light-neumorphic"] {
+        for screen in [desktop(), phone()] {
+            drawn(screen, theme, every_chat_part);
+        }
+    }
+}

@@ -270,11 +270,15 @@ impl Canvas {
                 let circle = Circle::new(point(centre), f64::from(radius));
                 self.context.stroke_path(&circle.to_path(0.1));
             }
-            Decor::Arc { centre, radius, width, start, sweep, fill } => {
+            Decor::Arc { centre, radius, width, start, sweep, fill, round } => {
                 self.set_fill(fill);
+                let caps = match round {
+                    true => vello_cpu::kurbo::Cap::Round,
+                    false => vello_cpu::kurbo::Cap::Butt,
+                };
                 self.context.set_stroke(
                     Stroke::new(f64::from(width))
-                        .with_caps(vello_cpu::kurbo::Cap::Round)
+                        .with_caps(caps)
                         .with_join(vello_cpu::kurbo::Join::Round),
                 );
                 // `kurbo::Arc` measures from three o'clock and anticlockwise; the library's own angles

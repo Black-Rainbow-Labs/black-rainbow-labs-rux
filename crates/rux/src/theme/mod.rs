@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use egui::Color32;
 
 pub use tokens::{
-    rgb, rgba, with_opacity, Accents, Elevation, Elevations, Gradient, Gradients, Ink, Opacity,
+    rgb, rgba, with_opacity, Accents, Chat, Elevation, Elevations, Gradient, Gradients, Ink, Opacity,
     Radii, Semantic, Shadow, ShadowTones, Surfaces,
 };
 
@@ -64,6 +64,8 @@ pub struct Theme {
     pub radius: Radii,
     pub elevation: Elevations,
     pub gradient: Gradients,
+    /// The Agent-Chat design's own values, worked out from `surface.s1`. See [`Chat`].
+    pub chat: Chat,
 }
 
 impl Theme {
@@ -106,6 +108,7 @@ impl Theme {
         theme.interaction.accent_wash_soft = with_opacity(blue, 0.04);
         theme.interaction.focus_ring = with_opacity(blue, 0.65);
         theme.elevation = elevations(&theme.shadow, &theme.accent, &theme.gradient);
+        theme.chat = Chat::lit_from(surface.s1, theme.dark);
         theme
     }
 
@@ -206,6 +209,7 @@ pub fn light() -> &'static Theme {
             radius: Radii::REFERENCE,
             elevation: elevations(&shadow, &accent, &gradient),
             gradient,
+            chat: Chat::lit_from(rgb(0xECEFF3), false),
         }
     })
 }
@@ -293,6 +297,7 @@ pub fn dark() -> &'static Theme {
             radius: Radii::REFERENCE,
             elevation: elevations(&shadow, &accent, &gradient),
             gradient,
+            chat: Chat::lit_from(rgb(0x23272E), true),
         }
     })
 }
@@ -430,6 +435,35 @@ mod tests {
         // And 160deg — the one every diagonal in the reference uses — runs down and to the right.
         let (from, to) = Gradient::at(160.0, Color32::WHITE, Color32::BLACK).axis(rect);
         assert!(to.x > from.x && to.y > from.y);
+    }
+
+    #[test]
+    fn the_chat_values_on_the_canvas_s_own_pane_are_the_canvas_s_hex() {
+        // The Agent-Chat canvas writes its dark values as literal hex on a `#1f232a` pane. Written as
+        // steps from that pane, they have to come back as exactly those hex values there.
+        let chat = Chat::lit_from(rgb(0x1F232A), true);
+        assert_eq!(chat.card.from, rgb(0x252A32));
+        assert_eq!(chat.card.to, rgb(0x1C2026));
+        assert_eq!(chat.card.angle, 145.0);
+        assert_eq!(chat.well, rgb(0x1A1E24));
+        assert_eq!(chat.light, rgb(0x2A2F37));
+        assert_eq!(chat.dark, rgb(0x0C0F13));
+        assert_eq!(chat.track, rgb(0x2C323B));
+        assert_eq!(chat.quiet, rgb(0x3A404A));
+        assert_eq!(chat.slices, [rgb(0x4A515C), rgb(0x363C46)]);
+        assert_eq!((chat.action.from, chat.action.to), (rgb(0x3D78FF), rgb(0x5CB6FF)));
+        assert_eq!((chat.slower, chat.faster), (rgb(0xFF8F73), rgb(0x3AD6AD)));
+        let raised: Vec<_> = chat.raised().shadows().map(|s| (s.dx, s.dy, s.blur)).collect();
+        assert_eq!(raised, vec![(-7.0, -7.0, 16.0), (8.0, 8.0, 18.0)]);
+        assert!(chat.carved().shadows().all(|s| s.inset));
+    }
+
+    #[test]
+    fn a_retoned_theme_works_its_chat_values_out_from_its_own_pane() {
+        let base = dark();
+        let surface = Surfaces { s1: rgb(0x1F232A), ..base.surface };
+        let theme = base.retoned("x", surface, base.shadow, base.ink, base.accent.blue);
+        assert_eq!(theme.chat, Chat::lit_from(rgb(0x1F232A), true));
     }
 
     #[test]

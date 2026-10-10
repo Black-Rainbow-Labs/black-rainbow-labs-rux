@@ -196,7 +196,10 @@ impl IconAtlas {
         for part in key.icon.parts() {
             let path = path_of(part.shape);
             if part.fill {
+                let alpha = (part.fill_opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+                self.context.set_paint(AlphaColor::from_rgba8(255, 255, 255, alpha));
                 self.context.fill_path(&path);
+                self.context.set_paint(AlphaColor::from_rgba8(255, 255, 255, 255));
             }
             if part.stroke {
                 self.context.stroke_path(&path);
@@ -402,7 +405,7 @@ pub struct Mark {
 
 impl Mark {
     pub fn new(icon: Icon, size: f32) -> Self {
-        Self { icon, size, stroke: DEFAULT_STROKE, turn: 0.0 }
+        Self { icon, size, stroke: icon.stroke(), turn: 0.0 }
     }
 
     pub fn stroke(mut self, stroke: f32) -> Self {
@@ -517,7 +520,7 @@ mod tests {
     fn every_icon_s_path_data_parses() {
         // The path strings are copied from the reference verbatim, so the thing that can go wrong is a
         // transcription error — a missing quote, a dropped command letter. This is that check.
-        for icon in Icon::ALL {
+        for icon in Icon::every() {
             for part in icon.parts() {
                 if let Shape::Path(d) = part.shape {
                     let path = BezPath::from_svg(d)
@@ -535,7 +538,7 @@ mod tests {
         // slack that has to fit — which is what `PAD` is for, and this is the check that one pixel is
         // enough.
         let widest = 2.4_f64 / 2.0;
-        for icon in Icon::ALL {
+        for icon in Icon::every() {
             for part in icon.parts() {
                 let bounds = path_of(part.shape).bounding_box();
                 let margin = if part.stroke { widest } else { 0.0 };

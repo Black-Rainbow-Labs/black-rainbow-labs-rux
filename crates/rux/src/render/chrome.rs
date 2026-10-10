@@ -177,7 +177,28 @@ impl Chrome {
         sweep: f32,
         fill: impl Into<Fill>,
     ) {
-        self.push(Decor::Arc { centre, radius, width, start, sweep, fill: fill.into() });
+        self.push(Decor::Arc { centre, radius, width, start, sweep, fill: fill.into(), round: true });
+    }
+
+    /// The same arc with square ends, for a slice too short to carry round caps. See [`Decor::Arc`].
+    pub fn arc_square(
+        &self,
+        centre: Pos2,
+        radius: f32,
+        width: f32,
+        start: f32,
+        sweep: f32,
+        fill: impl Into<Fill>,
+    ) {
+        self.push(Decor::Arc {
+            centre,
+            radius,
+            width,
+            start,
+            sweep,
+            fill: fill.into(),
+            round: false,
+        });
     }
 
     pub fn line(&self, from: Pos2, to: Pos2, width: f32, colour: Color32) {

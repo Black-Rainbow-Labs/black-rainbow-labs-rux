@@ -191,7 +191,7 @@ impl Style {
         self.tracking * self.size
     }
 
-    fn format(self, colour: Color32) -> TextFormat {
+    pub(crate) fn format(self, colour: Color32) -> TextFormat {
         TextFormat {
             font_id: self.font(),
             extra_letter_spacing: self.extra_letter_spacing(),

@@ -19,6 +19,9 @@ pub struct Part {
     pub shape: Shape,
     pub fill: bool,
     pub stroke: bool,
+    /// `fill-opacity`, which only the paper airplane's body uses: a quarter-tinted wing under a full
+    /// outline.
+    pub fill_opacity: f32,
 }
 
 /// What that child is.
@@ -35,17 +38,22 @@ pub enum Shape {
 impl Part {
     /// The ordinary case: stroked, not filled.
     pub const fn stroked(shape: Shape) -> Self {
-        Self { shape, fill: false, stroke: true }
+        Self { shape, fill: false, stroke: true, fill_opacity: 1.0 }
     }
 
     /// `fill="currentColor"` with the stroke still inherited, which is what `dots` and `grip` are.
     pub const fn filled(shape: Shape) -> Self {
-        Self { shape, fill: true, stroke: true }
+        Self { shape, fill: true, stroke: true, fill_opacity: 1.0 }
+    }
+
+    /// `fill="currentColor" fill-opacity="…"` with the stroke inherited — the paper airplane's body.
+    pub const fn veiled(shape: Shape, fill_opacity: f32) -> Self {
+        Self { shape, fill: true, stroke: true, fill_opacity }
     }
 
     /// `fill="currentColor" stroke="none"` — `play` and `pause`.
     pub const fn solid(shape: Shape) -> Self {
-        Self { shape, fill: true, stroke: false }
+        Self { shape, fill: true, stroke: false, fill_opacity: 1.0 }
     }
 }
 
@@ -63,6 +71,10 @@ const fn circle(cx: f32, cy: f32, r: f32) -> Part {
 
 const fn rect(x: f32, y: f32, w: f32, h: f32, rx: f32) -> Part {
     Part::stroked(Shape::Rect { x, y, w, h, rx })
+}
+
+const fn solid(shape: Shape) -> Part {
+    Part::solid(shape)
 }
 
 const fn solid_rect(x: f32, y: f32, w: f32, h: f32, rx: f32) -> Part {
@@ -112,6 +124,18 @@ pub enum Icon {
     Expand,
     Copy,
     Wand,
+    // The marks below are not in `SbIcon`. They are the Agent-Chat design's (`task-2235`): the first
+    // seven are Unluminous's own window marks, transcribed from the SVG that
+    // `cargo run -p unluminous-app --example export_icons_svg` writes for the material set, and `Send`
+    // is the paper airplane the design canvas draws inline.
+    Clock,
+    Key,
+    Tick,
+    Cross,
+    File,
+    Rerun,
+    Photo,
+    Send,
 }
 
 impl Icon {
@@ -156,6 +180,40 @@ impl Icon {
         Icon::Wand,
     ];
 
+    /// The marks the Agent-Chat design added, which are not `SbIcon`'s and so are not in [`Icon::ALL`].
+    pub const CHAT: &'static [Icon] = &[
+        Icon::Clock,
+        Icon::Key,
+        Icon::Tick,
+        Icon::Cross,
+        Icon::File,
+        Icon::Rerun,
+        Icon::Photo,
+        Icon::Send,
+    ];
+
+    /// Every mark the library can draw: the reference's and the Agent-Chat design's.
+    pub fn every() -> impl Iterator<Item = Icon> {
+        Icon::ALL.iter().chain(Icon::CHAT).copied()
+    }
+
+    /// The `stroke-width` the mark's own drawing sets, in viewBox units.
+    ///
+    /// Every `SbIcon` is drawn at [`DEFAULT_STROKE`]. The Agent-Chat marks are smaller drawings inside
+    /// the same viewBox, each with the stroke its source sets, so a well that draws one at eighteen
+    /// points gets the weight the design shows.
+    pub fn stroke(self) -> f32 {
+        match self {
+            Icon::Clock | Icon::Key | Icon::File => 1.3,
+            Icon::Tick => 1.8,
+            Icon::Cross => 1.5,
+            Icon::Rerun => 1.4,
+            Icon::Photo => 1.2,
+            Icon::Send => 1.9,
+            _ => DEFAULT_STROKE,
+        }
+    }
+
     /// The name `SbIcon` knows this mark by.
     pub fn name(self) -> &'static str {
         match self {
@@ -196,12 +254,20 @@ impl Icon {
             Icon::Expand => "expand",
             Icon::Copy => "copy",
             Icon::Wand => "wand",
+            Icon::Clock => "clock",
+            Icon::Key => "key",
+            Icon::Tick => "tick",
+            Icon::Cross => "cross",
+            Icon::File => "file",
+            Icon::Rerun => "rerun",
+            Icon::Photo => "photo",
+            Icon::Send => "send",
         }
     }
 
     /// The icon with this `SbIcon` name, or `None`.
     pub fn named(name: &str) -> Option<Icon> {
-        Icon::ALL.iter().copied().find(|icon| icon.name() == name)
+        Icon::every().find(|icon| icon.name() == name)
     }
 
     /// The children of this icon's `<svg>`, in document order.
@@ -308,6 +374,47 @@ impl Icon {
             Icon::Wand => const {
                 &[p("m15 4 2 2M19 8l2 2M9 15l-6 6M15 4l-6 6 4 4 6-6-4-4Z")]
             },
+            // Unluminous's `<line>`, `<polyline>` and `<polygon>` children are written as path data with
+            // the same points, which is the same drawing; `<circle>` and `<rect>` keep their typed shapes.
+            Icon::Clock => const {
+                &[circle(12.0, 12.0, 5.0), p("M12 12L12 8.8"), p("M12 12L14.6 12.6")]
+            },
+            Icon::Key => const {
+                &[
+                    circle(8.5, 10.5, 2.6),
+                    p("M10.3 9.1L16.5 8"),
+                    p("M13.09 8.605L14.69 11.005"),
+                    p("M14.95 8.275L16.55 10.675"),
+                ]
+            },
+            Icon::Tick => const { &[p("M8 12L10.8 15"), p("M10.8 15L16 8.8")] },
+            Icon::Cross => const { &[p("M8 8L16 16"), p("M8 16L16 8")] },
+            Icon::File => const {
+                &[
+                    p("M8.9 6.5L12.8 6.5L16.2 9.9L16.2 16.4L15.1 17.5L8.9 17.5L7.8 16.4L7.8 7.6Z"),
+                    p("M12.8 6.5L12.8 9.3L13.4 9.9L16.2 9.9"),
+                ]
+            },
+            Icon::Rerun => const {
+                &[
+                    p("M13.783 7.115L15.097 7.823L16.156 8.874L16.872 10.183L17.188 11.642L17.076 13.13L16.546 14.525L15.642 15.712L14.438 16.593L13.033 17.096L11.543 17.18L10.091 16.837L8.796 16.096L7.765 15.017L7.082 13.69L6.805 12.224L6.955 10.739L7.521 9.358L8.455 8.195"),
+                    solid(Shape::Path("M13.685 6.32L18.285 4.32L17.885 9.32Z")),
+                ]
+            },
+            Icon::Photo => const {
+                &[
+                    rect(5.5, 6.5, 13.0, 11.0, 1.0),
+                    solid(Shape::Circle { cx: 15.1, cy: 9.7, r: 1.2 }),
+                    solid(Shape::Path("M7 16L10 11.5L13 16Z")),
+                    solid(Shape::Path("M11 16L14 13L17 16Z")),
+                ]
+            },
+            Icon::Send => const {
+                &[
+                    Part::veiled(Shape::Path("M21.5 2.5 14.6 21.4l-4-8-8-4z"), 0.22),
+                    p("M21.5 2.5 10.6 13.4"),
+                ]
+            },
         }
     }
 }
@@ -324,10 +431,10 @@ mod tests {
 
     #[test]
     fn every_icon_has_a_name_and_a_drawing() {
-        for icon in Icon::ALL {
+        for icon in Icon::every() {
             assert!(!icon.name().is_empty());
             assert!(!icon.parts().is_empty(), "{} has no parts", icon.name());
-            assert_eq!(Icon::named(icon.name()), Some(*icon));
+            assert_eq!(Icon::named(icon.name()), Some(icon));
         }
     }
 

@@ -318,3 +318,169 @@ pub struct Elevations {
     /// `.scene__image` — a dark well that is both pressed into itself and raised off the page.
     pub image_well: Elevation,
 }
+
+/// The values the Agent-Chat design draws in (`task-2235`).
+///
+/// That design is lit from the top left like the rest of the library, but harder: a card is a
+/// diagonal gradient extruded from the pane with a wide pair of shadows, a well is carved into it with
+/// the same pair inset, and every control is round or a pill. Its source is the Claude Design canvas
+/// "Unluminous", page Agent-Chat, which writes the dark values as literal hex; [`Chat::lit_from`] is
+/// those values written as steps from the pane's own colour, so the same design follows any ground.
+///
+/// Only colours are kept here. The shadows are made from them by the methods below, so both themes
+/// declare the same recipes, which is the property [`super::Theme`] exists to keep.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Chat {
+    /// The pane the design sits on. The focus ring's gap is painted in it.
+    pub ground: Color32,
+    /// `--card: linear-gradient(145deg, #252a32, #1c2026)`: every card, bubble and round button.
+    pub card: Gradient,
+    /// `--well: #1a1e24`: everything carved in, from the prompt box to a slider's groove.
+    pub well: Color32,
+    /// The lit half of every shadow pair: `#2a2f37`.
+    pub light: Color32,
+    /// The dark half of every shadow pair: `#0c0f13`.
+    pub dark: Color32,
+    /// `--grad: linear-gradient(135deg, #3d78ff, #5cb6ff)`: the one action, and every data series.
+    pub action: Gradient,
+    /// `--grad-hover`: the action under the pointer.
+    pub action_hover: Gradient,
+    /// The blue glow under the action: `rgba(20, 60, 160, 0.45)`.
+    pub action_glow: Color32,
+    /// The pale edge inside a pressed action: `rgba(140, 200, 255, 0.25)`.
+    pub action_sheen: Color32,
+    /// `--sky: #5cb6ff`: a control under the pointer, a running arc, the focus ring.
+    pub sky: Color32,
+    /// The empty part of a small ring: `#2c323b`.
+    pub track: Color32,
+    /// The quiet series a comparison is made against: `#3a404a`.
+    pub quiet: Color32,
+    /// The second and third slices of a ring chart: `#4a515c` and `#363c46`.
+    pub slices: [Color32; 2],
+    /// `--up: #ff8f73`: slower, failed, a line taken out.
+    pub slower: Color32,
+    /// `--down: #3ad6ad`: faster, done, a line put in.
+    pub faster: Color32,
+    /// `--wait: #ffc062`: waiting for somebody's OK.
+    pub waiting: Color32,
+}
+
+impl Chat {
+    /// The design's values for a pane of colour `ground`.
+    ///
+    /// For a dark ground each colour is the canvas's own value written as a step from the canvas's
+    /// pane, `#1f232a`, so on that pane this answers exactly the hex the canvas writes and on any other
+    /// dark pane it answers the same steps. A light ground has no canvas of its own; its steps are the
+    /// same design turned the right way up for a light surface, with darker accents so that words in
+    /// them stay readable on it.
+    pub fn lit_from(ground: Color32, dark: bool) -> Self {
+        let step = |colour: Color32, by: [i16; 3]| {
+            let channel = |value: u8, by: i16| (i16::from(value) + by).clamp(0, 255) as u8;
+            Color32::from_rgb(
+                channel(colour.r(), by[0]),
+                channel(colour.g(), by[1]),
+                channel(colour.b(), by[2]),
+            )
+        };
+        match dark {
+            true => Self {
+                ground,
+                card: Gradient::at(145.0, step(ground, [6, 7, 8]), step(ground, [-3, -3, -4])),
+                well: step(ground, [-5, -5, -6]),
+                light: step(ground, [11, 12, 13]),
+                dark: step(ground, [-19, -20, -23]),
+                action: Gradient::at(135.0, rgb(0x3D78FF), rgb(0x5CB6FF)),
+                action_hover: Gradient::at(135.0, rgb(0x4D86FF), rgb(0x70C2FF)),
+                action_glow: rgba(0x143CA0, 0.45),
+                action_sheen: rgba(0x8CC8FF, 0.25),
+                sky: rgb(0x5CB6FF),
+                track: step(ground, [13, 15, 17]),
+                quiet: step(ground, [27, 29, 32]),
+                slices: [step(ground, [43, 46, 50]), step(ground, [23, 25, 28])],
+                slower: rgb(0xFF8F73),
+                faster: rgb(0x3AD6AD),
+                waiting: rgb(0xFFC062),
+            },
+            false => Self {
+                ground,
+                card: Gradient::at(145.0, step(ground, [10, 9, 7]), step(ground, [-6, -6, -5])),
+                well: step(ground, [-5, -5, -4]),
+                light: rgb(0xFFFFFF),
+                dark: step(ground, [-44, -40, -34]),
+                action: Gradient::at(135.0, rgb(0x2F6BFF), rgb(0x4AA3FF)),
+                action_hover: Gradient::at(135.0, rgb(0x447BFF), rgb(0x62B1FF)),
+                action_glow: rgba(0x1E50C8, 0.35),
+                action_sheen: rgba(0xC8E4FF, 0.35),
+                sky: rgb(0x2A7FE0),
+                track: step(ground, [-18, -16, -13]),
+                quiet: step(ground, [-34, -31, -27]),
+                slices: [step(ground, [-52, -47, -40]), step(ground, [-24, -22, -18])],
+                slower: rgb(0xD9543C),
+                faster: rgb(0x0F9A76),
+                waiting: rgb(0xB97A0E),
+            },
+        }
+    }
+
+    /// `--out: -7px -7px 16px light, 8px 8px 18px dark`: a card.
+    pub fn raised(&self) -> Elevation {
+        Elevation::of([
+            Shadow::outer(-7.0, -7.0, 16.0, self.light),
+            Shadow::outer(8.0, 8.0, 18.0, self.dark),
+        ])
+    }
+
+    /// `--out-sm: -4px -4px 9px light, 4px 4px 10px dark`: a bubble, a round button, a knob.
+    pub fn raised_sm(&self) -> Elevation {
+        Elevation::of([
+            Shadow::outer(-4.0, -4.0, 9.0, self.light),
+            Shadow::outer(4.0, 4.0, 10.0, self.dark),
+        ])
+    }
+
+    /// `--in: inset 5px 5px 10px dark, inset -5px -5px 10px light`: the prompt box, a dial's channel.
+    pub fn carved(&self) -> Elevation {
+        Elevation::of([
+            Shadow::inset(5.0, 5.0, 10.0, self.dark),
+            Shadow::inset(-5.0, -5.0, 10.0, self.light),
+        ])
+    }
+
+    /// `--in-sm: inset 2px 2px 5px dark, inset -2px -2px 5px light`: a status well, a code block.
+    pub fn carved_sm(&self) -> Elevation {
+        Elevation::of([
+            Shadow::inset(2.0, 2.0, 5.0, self.dark),
+            Shadow::inset(-2.0, -2.0, 5.0, self.light),
+        ])
+    }
+
+    /// `--grad-out`: the action, lifted, with its blue glow and a lit top edge.
+    pub fn action_raised(&self) -> Elevation {
+        Elevation::of([
+            Shadow::outer(-4.0, -4.0, 9.0, self.light),
+            Shadow::outer(4.0, 5.0, 12.0, self.action_glow),
+            Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.25)),
+        ])
+    }
+
+    /// `--grad-in`: the action, pressed into itself.
+    pub fn action_pressed(&self) -> Elevation {
+        Elevation::of([
+            Shadow::inset(3.0, 3.0, 7.0, Color32::BLACK.at(0.35)),
+            Shadow::inset(-2.0, -2.0, 5.0, self.action_sheen),
+        ])
+    }
+
+    /// The Chat settings dialog: a lit edge up and left, and a long soft fall below.
+    pub fn floating(&self) -> Elevation {
+        Elevation::of([
+            Shadow::outer(-6.0, -6.0, 16.0, self.light.at(0.6)),
+            Shadow::outer(0.0, 24.0, 48.0, Color32::BLACK.at(0.55)),
+        ])
+    }
+
+    /// `--ring`'s outer half: `rgba(92, 182, 255, 0.6)`.
+    pub fn focus(&self) -> Color32 {
+        self.sky.at(0.6)
+    }
+}

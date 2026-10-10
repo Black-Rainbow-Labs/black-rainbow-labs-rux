@@ -136,7 +136,10 @@ pub enum Decor {
     ///
     /// Angles in radians, clockwise from twelve o'clock, which is how the reference's
     /// `M22 4 a18 18 0 0 1 18 18` reads.
-    Arc { centre: Pos2, radius: f32, width: f32, start: f32, sweep: f32, fill: Fill },
+    ///
+    /// `round` is the stroke's caps: round for every arc the reference draws, square-ended for a ring
+    /// chart's slice too short to carry two round caps without growing past its own share.
+    Arc { centre: Pos2, radius: f32, width: f32, start: f32, sweep: f32, fill: Fill, round: bool },
     /// A straight line: every divider and hairline.
     Line { from: Pos2, to: Pos2, width: f32, colour: Color32 },
     /// Everything after this is cut to this rounded rectangle, until [`Decor::Unclip`].
@@ -247,13 +250,14 @@ impl Hash for Decor {
                 f(width, into);
                 colour.to_array().hash(into);
             }
-            Decor::Arc { centre, radius, width, start, sweep, fill: paint } => {
+            Decor::Arc { centre, radius, width, start, sweep, fill: paint, round } => {
                 pos(centre, into);
                 f(radius, into);
                 f(width, into);
                 f(start, into);
                 f(sweep, into);
                 fill(paint, into);
+                round.hash(into);
             }
             Decor::Line { from, to, width, colour } => {
                 pos(from, into);

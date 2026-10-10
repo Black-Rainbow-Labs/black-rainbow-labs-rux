@@ -5,6 +5,7 @@
 //! type into. That is the whole point of a storybook, and it is what finds the state that does not
 //! work.
 
+pub mod chat;
 pub mod components;
 pub mod foundations;
 pub mod pages;
@@ -121,6 +122,7 @@ pub struct Story {
 pub fn all() -> Vec<Story> {
     let mut stories = foundations::stories();
     stories.extend(components::stories());
+    stories.extend(chat::stories());
     stories.extend(pages::stories());
     stories
 }

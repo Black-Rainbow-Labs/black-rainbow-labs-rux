@@ -279,6 +279,14 @@ fn icons(rux: &mut Rux<'_>, _demo: &mut Demo, area: Rect) -> f32 {
     }
     pen.strip(grid.height_for(Icon::ALL.len()));
     pen.gap(GROUP_GAP);
+    // The Agent-Chat design's marks, which are not `SbIcon`'s (`task-2235`).
+    group(rux, &mut pen, "The Agent-Chat marks");
+    let grid = Grid::new(pen.rest(), columns).gap(22.0, 12.0).row_height(76.0);
+    for (index, icon) in Icon::CHAT.iter().enumerate() {
+        icon_cell(rux, grid.cell(index), *icon);
+    }
+    pen.strip(grid.height_for(Icon::CHAT.len()));
+    pen.gap(GROUP_GAP);
     pen.used()
 }
 
