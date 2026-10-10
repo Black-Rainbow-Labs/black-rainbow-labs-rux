@@ -14,6 +14,7 @@
 //! for the right cursor and `cursor: pointer`, `cursor: text` and `cursor: grab` are all written down
 //! in the reference.
 
+mod answer;
 mod avatar;
 mod button;
 mod cards;
@@ -40,9 +41,13 @@ mod tile;
 mod toggle;
 mod top_nav;
 
+pub use answer::{
+    card_header, chat_card, chat_raised_sm, chat_well, chat_well_deep, spark_points, FileChip, Legend, LegendRow,
+    NotePill, Readout, Sparkline, ThinkingPill, CARD_RADIUS, CHART_RADIUS, WELL_RADIUS,
+};
 pub use avatar::Avatar;
 pub use button::{Button, ButtonSize, ButtonVariant};
-pub use cards::{CardOutcome, CodeBlock, CommandCard, DiffCard, ErrorCard, Line, PermissionCard, Sign};
+pub use cards::{CardOutcome, CodeBlock, CommandCard, Corner, DiffCard, ErrorCard, Lead, Line, PermissionCard, Sign};
 pub use chart::{nice_ticks, Chart, ChartKind, ChartOutcome, Series};
 pub use chip::{Chip, ChipVariant};
 pub use dial::{arc_segments, smooth, AreaChart, Dial, Ring, Segment, Slice, SlicePaint, Track};

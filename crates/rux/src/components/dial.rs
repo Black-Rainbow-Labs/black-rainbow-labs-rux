@@ -365,6 +365,7 @@ pub struct AreaChart<'a> {
     range: Option<(f32, f32)>,
     marker: Option<(usize, &'a str)>,
     ends: Option<(&'a str, &'a str)>,
+    compare: &'a [f32],
     label: &'a str,
 }
 
@@ -373,7 +374,7 @@ const AREA_HEIGHT: f32 = 150.0;
 
 impl<'a> AreaChart<'a> {
     pub fn new(values: &'a [f32]) -> Self {
-        Self { values, range: None, marker: None, ends: None, label: "Area chart" }
+        Self { values, range: None, marker: None, ends: None, compare: &[], label: "Area chart" }
     }
 
     /// The values at the bottom and the top of the chart. Without it the chart fits the values.
@@ -385,6 +386,13 @@ impl<'a> AreaChart<'a> {
     /// A dashed line at value `index`, named: `rux added`.
     pub fn marker(mut self, index: usize, text: &'a str) -> Self {
         self.marker = Some((index, text));
+        self
+    }
+
+    /// An earlier series on the same scale, drawn as a quiet line under the curve: last week beside
+    /// this week. It has no fill and no marked end, so the chart is still about the one series.
+    pub fn compare(mut self, values: &'a [f32]) -> Self {
+        self.compare = values;
         self
     }
 
@@ -419,6 +427,11 @@ impl<'a> AreaChart<'a> {
         );
         let points = self.points(inner, rux.zoom());
         let painter = rux.painter().clone();
+        let earlier = self.points_of(self.compare, inner, rux.zoom());
+        if earlier.len() >= 2 {
+            let stroke = PathStroke::new(rux.z(2.0), chat.quiet);
+            painter.add(Shape::Path(PathShape::line(smooth(&earlier), stroke)));
+        }
         if points.len() >= 2 {
             let curve = smooth(&points);
             self.paint_area(&painter, &curve, &points, inner, rux.zoom(), &chat);
@@ -472,15 +485,20 @@ impl<'a> AreaChart<'a> {
     /// Each value's place, on the canvas's own plot inside a 360 by 150 box: `x` from 8 to 350 and
     /// `y` from 138 at the bottom of the range to 26 at the top.
     fn points(&self, inner: Rect, zoom: f32) -> Vec<Pos2> {
+        self.points_of(self.values, inner, zoom)
+    }
+
+    fn points_of(&self, values: &[f32], inner: Rect, zoom: f32) -> Vec<Pos2> {
         let (low, high) = self.range.unwrap_or_else(|| {
-            let low = self.values.iter().copied().fold(f32::INFINITY, f32::min);
-            let high = self.values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let every = self.values.iter().chain(self.compare.iter()).copied();
+            let low = every.clone().fold(f32::INFINITY, f32::min);
+            let high = every.fold(f32::NEG_INFINITY, f32::max);
             let pad = ((high - low) * 0.15).max(1.0);
             (low - pad, high + pad)
         });
         let across = inner.width() / 360.0;
-        let count = self.values.len().max(2) - 1;
-        self.values
+        let count = values.len().max(2) - 1;
+        values
             .iter()
             .enumerate()
             .map(|(index, value)| {

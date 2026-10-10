@@ -426,6 +426,27 @@ fn every_chat_part(rux: &mut rux::Rux<'_>) {
     let card = ErrorCard::new("cargo exited with code 101", "cargo build", &lines);
     let height = card.height(rux);
     card.show(rux, at(780.0, 720.0, 380.0, height));
+    let spark = [126.0, 131.0, 129.0, 134.0, 151.0, 170.0, 178.0];
+    let readout = rux::components::Readout::new("Total", "178", " s").delta("+39%", chat.slower).spark(&spark);
+    let height = readout.height(rux);
+    readout.show(rux, at(20.0, 620.0, 140.0, height));
+    let rows = [rux::components::LegendRow { name: "unluminous-app".into(), value: "131 s".into(), paint: SlicePaint::Action }];
+    let legend = rux::components::Legend::new(&rows);
+    let height = legend.height(rux);
+    legend.show(rux, at(180.0, 620.0, 200.0, height));
+    let chip = rux::components::FileChip::new("theme/icon.rs");
+    let size = chip.measure(rux);
+    chip.show(rux, at(180.0, 680.0, size.x, size.y));
+    let pill = rux::components::ThinkingPill::new("claude is thinking", "0:04", chat.sky);
+    let size = pill.measure(rux);
+    pill.show(rux, at(400.0, 620.0, size.x, size.y));
+    let note = rux::components::NotePill::new("Context compacted \u{b7} 41k tokens before");
+    let size = note.measure(rux);
+    note.show(rux, at(400.0, 680.0, size.x, size.y));
+    let earlier = [100.0, 110.0, 120.0, 118.0, 125.0, 128.0, 128.0];
+    let chart = AreaChart::new(&days).compare(&earlier);
+    let size = chart.measure(rux);
+    chart.show(rux, at(400.0, 730.0, 360.0, size.y));
 }
 
 #[test]

@@ -158,12 +158,17 @@ fn charts(rux: &mut Rux<'_>, pen: &mut Pen) {
     .caption("app", theme.ink.i400)
     .label("Where this week's 178 seconds went: app 131, core 38, cli 9")
     .show(rux, ring);
-    let words = ["unluminous-app  131 s", "unluminous-core  38 s", "unluminous-cli  9 s"];
-    for (index, word) in words.iter().enumerate() {
-        let galley = rux.text(Style::sans(12.0), word, theme.ink.i700);
-        let at = Pos2::new(ring.right() + 22.0, ring.top() + 36.0 + index as f32 * 26.0);
-        rux.painter().galley(at, galley, theme.ink.i700);
-    }
+    let rows = [
+        rux::components::LegendRow { name: "unluminous-app".into(), value: "131 s".into(), paint: SlicePaint::Action },
+        rux::components::LegendRow { name: "unluminous-core".into(), value: "38 s".into(), paint: SlicePaint::Colour(chat.slices[0]) },
+        rux::components::LegendRow { name: "unluminous-cli".into(), value: "9 s".into(), paint: SlicePaint::Colour(chat.slices[1]) },
+    ];
+    let legend = rux::components::Legend::new(&rows);
+    let height = legend.height(rux);
+    let galley = rux.text(Style::sans(12.0), "Where the time goes", theme.ink.i500);
+    rux.painter().galley(Pos2::new(ring.right() + 22.0, ring.top() + 24.0), galley, theme.ink.i500);
+    let rect = Rect::from_min_size(Pos2::new(ring.right() + 22.0, ring.top() + 52.0), Vec2::new(right_card.right() - ring.right() - 44.0, height));
+    legend.show(rux, rect);
     pen.gap(28.0);
     let bottom = pen.strip(250.0);
     let tracks = Rect::from_min_size(bottom.min, Vec2::new(half, 250.0));
@@ -191,6 +196,40 @@ fn charts(rux: &mut Rux<'_>, pen: &mut Pen) {
     let galley = rux.text(Style::sans(12.0), "Release build \u{00B7} 14 days", theme.ink.i500);
     rux.painter().galley(line.min + Vec2::new(22.0, 22.0), galley, theme.ink.i500);
     chart.label("Release build over the last 14 days").show(rux, inner);
+    pen.gap(28.0);
+    // The readouts: a number, how it changed and a sparkline of the week, each on a card of its own.
+    let strip = pen.strip(150.0);
+    let each = ((strip.width() - 28.0) / 3.0).min(200.0);
+    let readouts: [(&str, &str, &str, [f32; 7], bool); 3] = [
+        ("Total", "178", "+39%", [126.0, 131.0, 129.0, 134.0, 151.0, 170.0, 178.0], true),
+        ("App", "131", "+62%", [81.0, 84.0, 83.0, 88.0, 104.0, 122.0, 131.0], true),
+        ("Core", "38", "\u{2212}7%", [41.0, 41.0, 40.0, 40.0, 39.0, 38.0, 38.0], false),
+    ];
+    for (index, (label, value, delta, spark, up)) in readouts.iter().enumerate() {
+        let colour = if *up { chat.slower } else { chat.faster };
+        let readout = rux::components::Readout::new(label, value, " s").delta(delta, colour).spark(spark);
+        let height = readout.height(rux);
+        let rect = Rect::from_min_size(Pos2::new(strip.left() + index as f32 * (each + 14.0), strip.top()), Vec2::new(each, height));
+        readout.show(rux, rect);
+    }
+    pen.gap(28.0);
+    // The thinking pill, the compacted note and the file chips of a run of reads.
+    let row = pen.strip(42.0);
+    let pill = rux::components::ThinkingPill::new("claude is thinking", "0:04", rux.theme().chat.sky);
+    let size = pill.measure(rux);
+    pill.show(rux, Rect::from_min_size(row.min, size));
+    let note = rux::components::NotePill::new("Context compacted \u{b7} 41k \u{2192} 9k tokens");
+    let note_size = note.measure(rux);
+    note.show(rux, Rect::from_min_size(Pos2::new(row.left() + size.x + 28.0, row.center().y - note_size.y / 2.0), note_size));
+    pen.gap(20.0);
+    let chips = pen.strip(30.0);
+    let mut x = chips.left();
+    for name in ["Cargo.toml", "Cargo.lock", "theme/mod.rs", "theme/icon.rs"] {
+        let chip = rux::components::FileChip::new(name);
+        let size = chip.measure(rux);
+        chip.show(rux, Rect::from_min_size(Pos2::new(x, chips.top()), size));
+        x += size.x + 8.0;
+    }
 }
 
 /// The words beside a dial: a label, then each series' swatch, name and value.
