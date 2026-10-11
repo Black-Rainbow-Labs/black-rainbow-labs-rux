@@ -437,6 +437,17 @@ mod tests {
         assert!(to.x > from.x && to.y > from.y);
     }
 
+    /// The Agent-Tasks board's chips (`task-2241`), on the canvas's own pane, are the canvas's own hex:
+    /// `--chip: linear-gradient(145deg, #262b33, #20242b)` and the `#0b0d11` half of its shadow.
+    #[test]
+    fn the_chip_values_on_the_canvas_s_own_pane_are_the_canvas_s_hex() {
+        let chat = Chat::lit_from(rgb(0x1F232A), true);
+        assert_eq!(chat.chip.from, rgb(0x262B33));
+        assert_eq!(chat.chip.to, rgb(0x20242B));
+        assert_eq!(chat.chip_dark, rgb(0x0B0D11));
+        assert_eq!(chat.track, rgb(0x2C323B));
+    }
+
     #[test]
     fn the_chat_values_on_the_canvas_s_own_pane_are_the_canvas_s_hex() {
         // The Agent-Chat canvas writes its dark values as literal hex on a `#1f232a` pane. Written as

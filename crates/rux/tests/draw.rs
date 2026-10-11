@@ -457,3 +457,71 @@ fn every_chat_part_draws_in_both_themes_on_both_screens() {
         }
     }
 }
+
+/// The Agent-Tasks design's parts (`task-2241`): the view switch with and without its words, the sprint ring,
+/// the search well, a lane of each kind, a card with each of its round buttons, the chip button, the round tick
+/// box, a chip select open and shut, the small pill switch and the round action button.
+fn every_board_part(rux: &mut rux::Rux<'_>) {
+    use rux::components::{
+        search_well, Assignee, CardAction, ChipButton, Lane, LaneMark, PillButton, PillSwitch,
+        RoundButton, SelectLead, SprintRing, TaskCard, ViewSwitch,
+    };
+    let at = |x: f32, y: f32, w: f32, h: f32| Rect::from_min_size(egui::pos2(x, y), Vec2::new(w, h));
+    rux.ground(at(0.0, 0.0, 1400.0, 900.0));
+    let views = [(Icon::Storyboard, "Board"), (Icon::Layers, "Backlog"), (Icon::Check, "Completed"), (Icon::Cube, "Epics")];
+    let switch = ViewSwitch::new(&views, 0);
+    let full = switch.measure(rux);
+    switch.show(rux, at(20.0, 20.0, full.x, full.y));
+    let marks = ViewSwitch::new(&views, 2).measure_marks(rux);
+    ViewSwitch::new(&views, 2).show(rux, at(20.0, 80.0, marks.x, marks.y));
+    SprintRing::new(0.95).show(rux, at(420.0, 20.0, 44.0, 44.0));
+    SprintRing::new(0.0).show(rux, at(480.0, 20.0, 44.0, 44.0));
+    search_well(rux, at(540.0, 20.0, 260.0, 42.0));
+    let add = PillButton::new("Add Task").primary().large().mark(Icon::Plus);
+    let size = add.measure(rux);
+    add.show(rux, at(820.0, 20.0, size.x, size.y));
+    RoundButton::action(Icon::Plus, 16.0, "Add Task").show(rux, at(980.0, 20.0, 44.0, 44.0));
+    let lanes = [("New", LaneMark::New), ("QA failed", LaneMark::Failed), ("In progress", LaneMark::Running), ("Agent done", LaneMark::Done)];
+    for (index, (name, mark)) in lanes.into_iter().enumerate() {
+        let lane = at(20.0 + index as f32 * 290.0, 140.0, 270.0, 420.0);
+        let layout = Lane::new(name, index, mark).show(rux, lane);
+        let actions = [CardAction::Start, CardAction::Pause, CardAction::None, CardAction::Start];
+        let card = TaskCard::new("Unluminous Design Updates Prep, with a title long enough to wrap", "task-2230")
+            .todos(index as u32 * 2, 6)
+            .assignee(match index {
+                3 => Assignee::Person,
+                _ => Assignee::Agent(rux.theme().chat.sky),
+            })
+            .action(actions[index], "Start task-2230")
+            .hovered(index == 1)
+            .chosen(index == 2);
+        let height = card.height(rux, layout.cards.width());
+        card.show(rux, at(layout.cards.min.x, layout.cards.min.y, layout.cards.width(), height));
+    }
+    ChipButton::new(Icon::X, 36.0, "Close").mark(12.0, Some(1.8)).show(rux, at(20.0, 600.0, 36.0, 36.0));
+    ChipButton::new(Icon::ChevDown, 24.0, "Todos").folds(true).turn(std::f32::consts::PI).show(rux, at(70.0, 606.0, 24.0, 24.0));
+    rux::components::round_check(rux, at(110.0, 607.0, 22.0, 22.0), true, "Export the marks");
+    rux::components::round_check(rux, at(140.0, 607.0, 22.0, 22.0), false, "Carry it back");
+    let names = vec!["Low".to_owned(), "Medium".to_owned(), "High".to_owned()];
+    PillSwitch::new(&names, Some(1), "Priority").small().show(rux, at(200.0, 600.0, 234.0, 38.0));
+    let statuses = vec!["New".to_owned(), "In progress".to_owned()];
+    let mut shut = rux::components::SelectState::default();
+    rux::components::Select::new(&statuses, Some(1))
+        .label("Status")
+        .chip(SelectLead::Lane(LaneMark::Running))
+        .show(rux, at(460.0, 600.0, 234.0, 38.0), &mut shut);
+    let mut open = rux::components::SelectState { open: true, scroll: 0.0 };
+    rux::components::Select::new(&statuses, None)
+        .label("Epic")
+        .chip(SelectLead::Mark(Icon::Layers, rux.theme().ink.i400))
+        .show(rux, at(720.0, 600.0, 234.0, 38.0), &mut open);
+}
+
+#[test]
+fn every_board_part_draws_in_both_themes_on_both_screens() {
+    for theme in ["dark-neumorphic", "light-neumorphic"] {
+        for screen in [desktop(), phone()] {
+            drawn(screen, theme, every_board_part);
+        }
+    }
+}

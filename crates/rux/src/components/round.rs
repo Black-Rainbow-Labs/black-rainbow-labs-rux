@@ -44,6 +44,8 @@ pub struct PillButton<'a> {
     /// Draw it held down whatever the pointer is doing, for the same reason.
     held: bool,
     hovered: bool,
+    /// The Agent-Tasks header's size: 42 tall with 13 point words.
+    large: bool,
 }
 
 impl<'a> PillButton<'a> {
@@ -56,7 +58,15 @@ impl<'a> PillButton<'a> {
             ring: false,
             held: false,
             hovered: false,
+            large: false,
         }
+    }
+
+    /// The size `Add Task` is in the Agent-Tasks header: `height: 42px`, `font-size: 13px`,
+    /// `padding: 0 20px 0 16px`, a 14 point mark and an 8 point gap.
+    pub fn large(mut self) -> Self {
+        self.large = true;
+        self
     }
 
     pub fn variant(mut self, variant: PillVariant) -> Self {
@@ -93,7 +103,10 @@ impl<'a> PillButton<'a> {
 
     fn style(&self) -> Style {
         // `font-size: 12.5px`, at 600 for the primary, 500 for the secondary and 400 for a ghost.
-        let style = Style::sans(12.5);
+        let style = Style::sans(match self.large {
+            true => 13.0,
+            false => 12.5,
+        });
         match self.variant {
             PillVariant::Primary => style.semibold(),
             PillVariant::Secondary => style.medium(),
@@ -104,6 +117,7 @@ impl<'a> PillButton<'a> {
     /// `padding: 0 18px`, `0 16px` and `0 14px`, and `0 16px 0 12px` with a mark and a 6 point gap.
     fn padding(&self) -> (f32, f32) {
         match (self.mark.is_some(), self.variant) {
+            (true, _) if self.large => (16.0, 20.0),
             (true, _) => (12.0, 16.0),
             (false, PillVariant::Primary) => (18.0, 18.0),
             (false, PillVariant::Secondary) => (16.0, 16.0),
@@ -116,14 +130,35 @@ impl<'a> PillButton<'a> {
         let words = rux.measure(rux.zs(self.style()), self.text).x;
         let (left, right) = self.padding();
         let mark = match self.mark {
-            Some(_) => rux.z(17.0 + 6.0),
+            Some(_) => rux.z(self.mark_size() + self.mark_gap()),
             None => 0.0,
         };
-        rux.screen().target(Vec2::new(words + mark + rux.z(left + right), rux.z(36.0)))
+        rux.screen().target(Vec2::new(words + mark + rux.z(left + right), rux.z(self.height())))
+    }
+
+    fn height(&self) -> f32 {
+        match self.large {
+            true => 42.0,
+            false => 36.0,
+        }
+    }
+
+    fn mark_size(&self) -> f32 {
+        match self.large {
+            true => 14.0,
+            false => 17.0,
+        }
+    }
+
+    fn mark_gap(&self) -> f32 {
+        match self.large {
+            true => 8.0,
+            false => 6.0,
+        }
     }
 
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> Response {
-        let height = rux.z(36.0).min(rect.height());
+        let height = rux.z(self.height()).min(rect.height());
         let rect = Rect::from_center_size(rect.center(), Vec2::new(rect.width(), height));
         let response = super::interact_target(rux, rect, "rux-pill", Sense::click());
         let visual = forced(Visual::of(&response, self.enabled, rux.screen().pointer), self.hovered, self.held);
@@ -164,7 +199,7 @@ impl<'a> PillButton<'a> {
         let galley = rux.text(style, self.text, ink);
         let (left, right) = self.padding();
         let mark_width = match self.mark {
-            Some(_) => rux.z(17.0 + 6.0),
+            Some(_) => rux.z(self.mark_size() + self.mark_gap()),
             None => 0.0,
         };
         let content = galley.size().x + mark_width;
@@ -172,8 +207,12 @@ impl<'a> PillButton<'a> {
         let room = rect.width() - rux.z(left + right);
         let start = rect.left() + rux.z(left) + ((room - content) / 2.0).max(0.0);
         if let Some(icon) = self.mark {
-            let centre = Pos2::new(start + rux.z(8.5), rect.center().y);
-            rux.mark(Mark::new(icon, rux.z(17.0)), centre, ink);
+            let centre = Pos2::new(start + rux.z(self.mark_size() / 2.0), rect.center().y);
+            let mark = match self.large {
+                true => Mark::new(icon, rux.z(14.0)).stroke(2.2),
+                false => Mark::new(icon, rux.z(17.0)),
+            };
+            rux.mark(mark, centre, ink);
         }
         crate::text::draw_left_capitals(
             rux.painter(),
@@ -221,6 +260,8 @@ pub enum RoundContent {
     Send,
     /// A small square in the slower colour on a raised card: stop.
     Stop,
+    /// A mark in white on the action's gradient: `Add Task` on a board too narrow for its words. `task-2241`.
+    Action(Mark),
 }
 
 /// A round button.
@@ -266,6 +307,11 @@ impl RoundButton {
     /// The round stop button, at the size of send.
     pub fn stop(label: &'static str) -> Self {
         Self::new(RoundContent::Stop, label).size(RoundSize::Send)
+    }
+
+    /// A round button on the action's gradient with a white mark in it, at the size of send.
+    pub fn action(icon: Icon, size: f32, label: &'static str) -> Self {
+        Self::new(RoundContent::Action(Mark::new(icon, size)), label).size(RoundSize::Send)
     }
 
     pub fn size(mut self, size: RoundSize) -> Self {
@@ -315,7 +361,7 @@ impl RoundButton {
         let fade = visual.fade();
         let sunk = matches!(visual, Visual::Active) || self.on;
         match self.content {
-            RoundContent::Send => {
+            RoundContent::Send | RoundContent::Action(_) => {
                 let (fill, elevation) = match visual {
                     Visual::Active => (&chat.action, chat.action_pressed()),
                     Visual::Hover => (&chat.action_hover, chat.action_raised()),
@@ -332,7 +378,7 @@ impl RoundButton {
             _ => surface(rux, rect, radius, card(&chat, rect), chat.raised_sm(), fade),
         }
         let ink = match (self.content, visual) {
-            (RoundContent::Send, _) => Color32::WHITE,
+            (RoundContent::Send | RoundContent::Action(_), _) => Color32::WHITE,
             (RoundContent::Stop, _) => chat.slower,
             (_, Visual::Hover) => chat.sky,
             (_, Visual::Active) if self.on => chat.sky,
@@ -343,7 +389,7 @@ impl RoundButton {
         }
         .gamma_multiply(fade);
         match self.content {
-            RoundContent::Mark(mark) => {
+            RoundContent::Mark(mark) | RoundContent::Action(mark) => {
                 let mark = Mark { size: rux.z(mark.size), ..mark };
                 rux.mark(mark, rect.center(), ink);
             }
@@ -378,28 +424,44 @@ pub struct PillSwitch<'a> {
     choices: &'a [String],
     chosen: Option<usize>,
     label: &'static str,
+    /// The Agent-Tasks ticket's priority: 38 tall, `padding: 4px; gap: 3px`, chips for the chosen pill.
+    small: bool,
 }
 
 impl<'a> PillSwitch<'a> {
     pub fn new(choices: &'a [String], chosen: Option<usize>, label: &'static str) -> Self {
-        Self { choices, chosen, label }
+        Self { choices, chosen, label, small: false }
     }
 
-    /// As wide as it is given, 46 points tall.
+    /// The smaller switch the ticket modal chooses a priority with. `task-2241`.
+    pub fn small(mut self) -> Self {
+        self.small = true;
+        self
+    }
+
+    fn sizes(&self) -> (f32, f32, f32) {
+        match self.small {
+            true => (38.0, 4.0, 3.0),
+            false => (46.0, 5.0, 4.0),
+        }
+    }
+
+    /// As wide as it is given, 46 points tall, or 38 when small.
     pub fn measure(&self, rux: &Rux<'_>) -> Vec2 {
-        Vec2::new(rux.z(240.0), rux.z(46.0))
+        Vec2::new(rux.z(240.0), rux.z(self.sizes().0))
     }
 
     /// Draws the switch and answers the choice pressed this frame, if any.
     pub fn show(self, rux: &mut Rux<'_>, rect: Rect) -> Option<usize> {
         let chat = rux.theme().chat;
         let theme = rux.theme();
-        let height = rux.z(46.0).min(rect.height());
+        let (tall, pad, gap) = self.sizes();
+        let height = rux.z(tall).min(rect.height());
         let track = Rect::from_center_size(rect.center(), Vec2::new(rect.width(), height));
         rux.chrome.surface(track, track.height() / 2.0, chat.well, chat.carved_sm());
         let count = self.choices.len().max(1) as f32;
-        let pad = rux.z(5.0);
-        let gap = rux.z(4.0);
+        let pad = rux.z(pad);
+        let gap = rux.z(gap);
         let width = (track.width() - pad * 2.0 - gap * (count - 1.0)) / count;
         let mut picked = None;
         for (index, choice) in self.choices.iter().enumerate() {
@@ -408,7 +470,9 @@ impl<'a> PillSwitch<'a> {
             let response = super::interact(rux, pill, "rux-pill-switch", Sense::click());
             pointing(rux, &response, true);
             let chosen = self.chosen == Some(index);
-            if chosen {
+            if chosen && self.small {
+                rux.chrome.surface(pill, pill.height() / 2.0, super::chip(&chat, pill), chat.raised_chip());
+            } else if chosen {
                 rux.chrome.surface(pill, pill.height() / 2.0, card(&chat, pill), chat.raised_sm());
             }
             let ink = match (chosen, super::hovering(rux, &response)) {
@@ -416,7 +480,10 @@ impl<'a> PillSwitch<'a> {
                 (false, true) => chat.sky,
                 (false, false) => theme.ink.i500,
             };
-            let style = rux.zs(Style::sans(12.0).medium());
+            let style = match self.small {
+                true => rux.zs(Style::sans(12.0)),
+                false => rux.zs(Style::sans(12.0).medium()),
+            };
             let galley = rux.elided(style, choice, ink, (pill.width() - rux.z(16.0)).max(0.0));
             crate::text::draw_centred(rux.painter(), pill, galley, ink);
             let name = format!("{}: {choice}", self.label);

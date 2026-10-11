@@ -363,6 +363,19 @@ pub struct Chat {
     pub faster: Color32,
     /// `--wait: #ffc062`: waiting for somebody's OK.
     pub waiting: Color32,
+    /// `--chip: linear-gradient(145deg, #262b33, #20242b)`: the Agent-Tasks design's small raised
+    /// surfaces, flatter than a card: a lane's mark and count, a chosen view, a card's round buttons.
+    pub chip: Gradient,
+    /// The lit half of a chip's shadow pair: `rgba(46, 52, 61, 0.7)`.
+    pub chip_light: Color32,
+    /// The dark half of a chip's shadow pair: `#0b0d11`.
+    pub chip_dark: Color32,
+    /// The hairline inside a chip's edge: `inset 0 0 0 1px rgba(255, 255, 255, 0.045)`.
+    pub chip_edge: Color32,
+    /// The lit line along a chip's top: `inset 0 1px 0 rgba(255, 255, 255, 0.05)`.
+    pub chip_top: Color32,
+    /// `linear-gradient(135deg, #2fb98f, #3ad6ad)`: a track whose work is all done.
+    pub done: Gradient,
 }
 
 impl Chat {
@@ -400,6 +413,12 @@ impl Chat {
                 slower: rgb(0xFF8F73),
                 faster: rgb(0x3AD6AD),
                 waiting: rgb(0xFFC062),
+                chip: Gradient::at(145.0, step(ground, [7, 8, 9]), step(ground, [1, 1, 1])),
+                chip_light: step(ground, [15, 17, 19]).at(0.7),
+                chip_dark: step(ground, [-20, -22, -25]),
+                chip_edge: Color32::WHITE.at(0.045),
+                chip_top: Color32::WHITE.at(0.05),
+                done: Gradient::at(135.0, rgb(0x2FB98F), rgb(0x3AD6AD)),
             },
             false => Self {
                 ground,
@@ -418,6 +437,12 @@ impl Chat {
                 slower: rgb(0xD9543C),
                 faster: rgb(0x0F9A76),
                 waiting: rgb(0xB97A0E),
+                chip: Gradient::at(145.0, step(ground, [8, 7, 6]), step(ground, [-2, -2, -2])),
+                chip_light: rgb(0xFFFFFF).at(0.9),
+                chip_dark: step(ground, [-44, -40, -34]).at(0.75),
+                chip_edge: Color32::BLACK.at(0.04),
+                chip_top: Color32::WHITE.at(0.6),
+                done: Gradient::at(135.0, rgb(0x0C8A69), rgb(0x0F9A76)),
             },
         }
     }
@@ -435,6 +460,17 @@ impl Chat {
         Elevation::of([
             Shadow::outer(-4.0, -4.0, 9.0, self.light),
             Shadow::outer(4.0, 4.0, 10.0, self.dark),
+        ])
+    }
+
+    /// The Agent-Tasks board's `--out-sm`: `-2px -2px 5px`, `3px 3px 6px` and a hairline inside the
+    /// edge. Tighter than a bubble's, for a chip, a count, a chosen view and a card's round buttons.
+    pub fn raised_chip(&self) -> Elevation {
+        Elevation::of([
+            Shadow::outer(-2.0, -2.0, 5.0, self.chip_light),
+            Shadow::outer(3.0, 3.0, 6.0, self.chip_dark),
+            Shadow::inset(0.0, 0.0, 0.0, self.chip_edge).spread(1.0),
+            Shadow::inset(0.0, 1.0, 0.0, self.chip_top),
         ])
     }
 

@@ -69,6 +69,19 @@ pub struct Select<'a> {
     zoom: f32,
     /// The menu's shadow, when the consumer wants a quieter one than `--e-raised-lg`.
     menu_elevation: Option<crate::Elevation>,
+    /// Drawn as the Agent-Tasks design's chip, with a mark before the value. See [`Select::chip`].
+    chip: Option<SelectLead>,
+}
+
+/// The mark before a chip select's value: the ticket modal's status, assignee, model, project and epic.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SelectLead {
+    /// A mark from the set, in a colour.
+    Mark(Icon, egui::Color32),
+    /// A lane's own mark, which is what a status is drawn with.
+    Lane(super::LaneMark),
+    /// No mark: the value starts where a mark would.
+    None,
 }
 
 impl<'a> Select<'a> {
@@ -83,7 +96,15 @@ impl<'a> Select<'a> {
             label: "Select",
             zoom: 1.0,
             menu_elevation: None,
+            chip: None,
         }
+    }
+
+    /// The Agent-Tasks design's field: a pill 38 points tall on the chip surface, `padding: 0 14px 0
+    /// 12px; gap: 10px`, an 18 point mark, the value in 12.5 point words and a 10 point chevron. `task-2241`.
+    pub fn chip(mut self, lead: SelectLead) -> Self {
+        self.chip = Some(lead);
+        self
     }
 
     pub fn placeholder(mut self, placeholder: &'a str) -> Self {
@@ -127,6 +148,9 @@ impl<'a> Select<'a> {
     }
 
     fn style(&self) -> Style {
+        if self.chip.is_some() {
+            return Style::sans(12.5 * self.zoom);
+        }
         let style = match self.mono {
             // `.ic-select--mono .ic-select__trigger { font-size: 11px; letter-spacing: 0.01em }`.
             true => Style::mono(11.0).medium().tracking(0.01),
@@ -161,6 +185,14 @@ impl<'a> Select<'a> {
         if response.clicked() && self.enabled {
             state.toggle();
             outcome.toggled = true;
+        }
+
+        if let Some(lead) = self.chip {
+            self.show_chip(rux, rect, state, &response, visual, lead);
+            if state.open {
+                outcome.chosen = self.show_menu(rux, rect, state, &response);
+            }
+            return outcome;
         }
 
         let theme = rux.theme();
@@ -218,6 +250,67 @@ impl<'a> Select<'a> {
             outcome.chosen = chosen;
         }
         outcome
+    }
+
+    /// The chip trigger: carved in while its menu is open, sky words under the pointer.
+    fn show_chip(
+        &self,
+        rux: &mut Rux<'_>,
+        rect: Rect,
+        state: &SelectState,
+        response: &Response,
+        visual: Visual,
+        lead: SelectLead,
+    ) {
+        let z = self.zoom;
+        let chat = rux.theme().chat;
+        let theme = rux.theme();
+        let height = (38.0 * z).min(rect.height());
+        let rect = Rect::from_center_size(rect.center(), Vec2::new(rect.width(), height));
+        let radius = height / 2.0;
+        match state.open {
+            true => rux.chrome.surface(rect, radius, chat.well, chat.carved_sm()),
+            false => rux.chrome.surface(rect, radius, super::chip(&chat, rect), chat.raised_chip()),
+        }
+        let fade = visual.fade();
+        let mark = egui::pos2(rect.left() + 12.0 * z + 9.0 * z, rect.center().y);
+        let value_left = match lead {
+            SelectLead::Mark(icon, colour) => {
+                rux.mark(Mark::new(icon, 15.0 * z), mark, colour.gamma_multiply(fade));
+                rect.left() + (12.0 + 18.0 + 10.0) * z
+            }
+            SelectLead::Lane(lane) => {
+                lane.paint(rux, mark, z);
+                rect.left() + (12.0 + 18.0 + 10.0) * z
+            }
+            SelectLead::None => rect.left() + 14.0 * z,
+        };
+        let chev = egui::pos2(rect.right() - 14.0 * z - 5.0 * z, rect.center().y);
+        let ink = match (self.selected.is_some(), response.hovered() && rux.screen().pointer.hovers()) {
+            (_, true) => chat.sky,
+            (true, false) => theme.ink.i900,
+            (false, false) => theme.ink.i400,
+        }
+        .gamma_multiply(fade);
+        let room = (chev.x - 5.0 * z - 10.0 * z - value_left).max(0.0);
+        let galley = rux.elided(self.style(), self.value(), ink, room);
+        crate::text::draw_left_capitals(
+            rux.ui.painter(),
+            egui::pos2(value_left, rect.center().y),
+            galley,
+            self.style(),
+            ink,
+        );
+        let turn = match state.open {
+            true => std::f32::consts::PI,
+            false => 0.0,
+        };
+        rux.mark(
+            Mark::new(Icon::ChevDown, 10.0 * z).stroke(1.6 * z).turn(turn),
+            chev,
+            theme.ink.i400.gamma_multiply(fade),
+        );
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, self.enabled, self.label));
     }
 
     /// `.ic-select__menu` — the list that opens under the trigger.

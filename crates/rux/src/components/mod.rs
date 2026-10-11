@@ -16,6 +16,7 @@
 
 mod answer;
 mod avatar;
+mod board;
 mod button;
 mod cards;
 mod chart;
@@ -46,6 +47,7 @@ pub use answer::{
     NotePill, Readout, Sparkline, ThinkingPill, CARD_RADIUS, CHART_RADIUS, WELL_RADIUS,
 };
 pub use avatar::Avatar;
+pub use board::{chip, chip_disc, round_check, search_well, Assignee, CardAction, ChipButton, Lane, LaneLayout, LaneMark, SprintRing, TaskCard, TaskCardOutcome, ViewSwitch};
 pub use button::{Button, ButtonSize, ButtonVariant};
 pub use cards::{CardOutcome, CodeBlock, CommandCard, Corner, DiffCard, ErrorCard, Lead, Line, PermissionCard, Sign};
 pub use chart::{nice_ticks, Chart, ChartKind, ChartOutcome, Series};
@@ -63,7 +65,7 @@ pub use panel::{Divider, Panel, PanelKind, SubGroup, SubGroupOutcome, Well};
 pub use project_menu::{ProjectMenu, ProjectMenuOutcome};
 pub use round::{PillButton, PillSwitch, PillVariant, RoundButton, RoundContent, RoundSize};
 pub use scrollbar::Scrollbar;
-pub use select::{Select, SelectOutcome, SelectState, SELECT_MENU_MAX_HEIGHT};
+pub use select::{Select, SelectLead, SelectOutcome, SelectState, SELECT_MENU_MAX_HEIGHT};
 pub use status::{Status, StatusWell};
 pub use stepper::{Stepper, StepperOutcome, STEPPER_WIDTH};
 pub use table::{is_figure, Align, Column, Item, Stage, Table, TableOutcome, Timeline};
