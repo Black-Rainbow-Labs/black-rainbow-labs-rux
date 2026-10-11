@@ -153,6 +153,11 @@ pub enum Icon {
     Halves,
     Eye,
     Start,
+    // The Settings design's marks (`task-2246`), for the pages of the Settings window that had no mark of
+    // their own: the theme, the plugins and the MCP server. Transcribed from the canvas's `SettingsModal`.
+    Palette,
+    Puzzle,
+    Plug,
 }
 
 impl Icon {
@@ -228,9 +233,12 @@ impl Icon {
         Icon::Start,
     ];
 
+    /// The marks the Settings design added (`task-2246`).
+    pub const SETTINGS: &'static [Icon] = &[Icon::Palette, Icon::Puzzle, Icon::Plug];
+
     /// Every mark the library can draw: the reference's, the Agent-Chat design's and the Editing code design's.
     pub fn every() -> impl Iterator<Item = Icon> {
-        Icon::ALL.iter().chain(Icon::CHAT).chain(Icon::WINDOW).copied()
+        Icon::ALL.iter().chain(Icon::CHAT).chain(Icon::WINDOW).chain(Icon::SETTINGS).copied()
     }
 
     /// The `stroke-width` the mark's own drawing sets, in viewBox units.
@@ -247,7 +255,8 @@ impl Icon {
             Icon::Photo => 1.2,
             Icon::Send => 1.9,
             Icon::Letters | Icon::Document | Icon::Bug | Icon::Terminal | Icon::Git | Icon::Realm | Icon::Bubble
-            | Icon::Board | Icon::Database | Icon::RunTile | Icon::Project => 1.7,
+            | Icon::Board | Icon::Database | Icon::RunTile | Icon::Project | Icon::Palette | Icon::Puzzle
+            | Icon::Plug => 1.7,
             _ => DEFAULT_STROKE,
         }
     }
@@ -315,6 +324,9 @@ impl Icon {
             Icon::Halves => "halves",
             Icon::Eye => "eye",
             Icon::Start => "start",
+            Icon::Palette => "palette",
+            Icon::Puzzle => "puzzle",
+            Icon::Plug => "plug",
         }
     }
 
@@ -484,6 +496,9 @@ impl Icon {
             Icon::Eye => const { &[p("M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6zM12 9.3a2.7 2.7 0 1 1 0 5.4a2.7 2.7 0 1 1 0-5.4z")] },
             // `M8 5.5v13l10.5-6.5z` with `fill-opacity: 0.18`: the run button's triangle, tinted inside.
             Icon::Start => const { &[Part::veiled(Shape::Path("M8 5.5v13l10.5-6.5z"), 0.18)] },
+            Icon::Palette => const { &[p("M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17zM12 3.5v17M12 7.5h4.5M12 11.5h6M12 15.5h4.5")] },
+            Icon::Puzzle => const { &[p("M9.5 4.5a2 2 0 0 1 4 0V6h3.5a1 1 0 0 1 1 1v3.5h-1.5a2 2 0 0 0 0 4H18V18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h2.5z")] },
+            Icon::Plug => const { &[p("M9 3.5v4M15 3.5v4M7 7.5h10v3a5 5 0 0 1-10 0zM12 15.5v5")] },
         }
     }
 }
