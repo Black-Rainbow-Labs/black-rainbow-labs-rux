@@ -136,6 +136,23 @@ pub enum Icon {
     Rerun,
     Photo,
     Send,
+    // The Editing code design's marks (`task-2241`): the rail's line icons, the text options mark, the three
+    // view modes and the run button's triangle, transcribed from the canvas's `EditorWindow` artboard.
+    Project,
+    Document,
+    Git,
+    Realm,
+    Bubble,
+    Board,
+    Database,
+    Bug,
+    RunTile,
+    Terminal,
+    Letters,
+    Lines,
+    Halves,
+    Eye,
+    Start,
 }
 
 impl Icon {
@@ -192,9 +209,28 @@ impl Icon {
         Icon::Send,
     ];
 
-    /// Every mark the library can draw: the reference's and the Agent-Chat design's.
+    /// The marks the Editing code design added (`task-2241`), which are not `SbIcon`'s either.
+    pub const WINDOW: &'static [Icon] = &[
+        Icon::Project,
+        Icon::Document,
+        Icon::Git,
+        Icon::Realm,
+        Icon::Bubble,
+        Icon::Board,
+        Icon::Database,
+        Icon::Bug,
+        Icon::RunTile,
+        Icon::Terminal,
+        Icon::Letters,
+        Icon::Lines,
+        Icon::Halves,
+        Icon::Eye,
+        Icon::Start,
+    ];
+
+    /// Every mark the library can draw: the reference's, the Agent-Chat design's and the Editing code design's.
     pub fn every() -> impl Iterator<Item = Icon> {
-        Icon::ALL.iter().chain(Icon::CHAT).copied()
+        Icon::ALL.iter().chain(Icon::CHAT).chain(Icon::WINDOW).copied()
     }
 
     /// The `stroke-width` the mark's own drawing sets, in viewBox units.
@@ -210,6 +246,8 @@ impl Icon {
             Icon::Rerun => 1.4,
             Icon::Photo => 1.2,
             Icon::Send => 1.9,
+            Icon::Letters | Icon::Document | Icon::Bug | Icon::Terminal | Icon::Git | Icon::Realm | Icon::Bubble
+            | Icon::Board | Icon::Database | Icon::RunTile | Icon::Project => 1.7,
             _ => DEFAULT_STROKE,
         }
     }
@@ -262,6 +300,21 @@ impl Icon {
             Icon::Rerun => "rerun",
             Icon::Photo => "photo",
             Icon::Send => "send",
+            Icon::Project => "project",
+            Icon::Document => "document",
+            Icon::Git => "git",
+            Icon::Realm => "realm",
+            Icon::Bubble => "bubble",
+            Icon::Board => "board",
+            Icon::Database => "database",
+            Icon::Bug => "bug",
+            Icon::RunTile => "runTile",
+            Icon::Terminal => "terminal",
+            Icon::Letters => "letters",
+            Icon::Lines => "lines",
+            Icon::Halves => "halves",
+            Icon::Eye => "eye",
+            Icon::Start => "start",
         }
     }
 
@@ -415,6 +468,22 @@ impl Icon {
                     p("M21.5 2.5 10.6 13.4"),
                 ]
             },
+            Icon::Project => const { &[p("M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z")] },
+            Icon::Document => const { &[p("M7 3.5h7l4 4v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zM14 3.5v4h4M8.5 12h7M8.5 15.5h4.5")] },
+            Icon::Git => const { &[p("M7 4a2 2 0 1 1 0 4a2 2 0 1 1 0-4zM7 16a2 2 0 1 1 0 4a2 2 0 1 1 0-4zM17 6a2 2 0 1 1 0 4a2 2 0 1 1 0-4zM7 8v8M17 10c0 3.5-3 4.5-8.6 6.4")] },
+            Icon::Realm => const { &[p("M6 4.8a2.2 2.2 0 1 1 0 4.4a2.2 2.2 0 1 1 0-4.4zM18 4.8a2.2 2.2 0 1 1 0 4.4a2.2 2.2 0 1 1 0-4.4zM12 14.8a2.2 2.2 0 1 1 0 4.4a2.2 2.2 0 1 1 0-4.4zM8.2 7h7.6M7.2 8.9l3.6 6.2M16.8 8.9l-3.6 6.2")] },
+            Icon::Bubble => const { &[p("M5 7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v5.5a2.5 2.5 0 0 1-2.5 2.5H11l-4 3.5V15h0.5A2.5 2.5 0 0 1 5 12.5zM9 9.8h6")] },
+            Icon::Board => const { &[p("M4.5 6a1.5 1.5 0 0 1 1.5-1.5h12A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18zM9.5 4.5v15M14.5 4.5v15")] },
+            Icon::Database => const { &[p("M5 6.5C5 5.1 8.1 4 12 4s7 1.1 7 2.5S15.9 9 12 9 5 7.9 5 6.5zM5 6.5v11c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-11M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5")] },
+            Icon::Bug => const { &[p("M8.5 10a3.5 3.5 0 0 1 7 0v3.5a3.5 3.5 0 0 1-7 0zM12 10v7M8.5 12.5H5M15.5 12.5H19M8.8 16l-2.6 2M15.2 16l2.6 2M8.8 9l-2.4-2M15.2 9l2.4-2M10 6.8 9 5M14 6.8l1-1.8")] },
+            Icon::RunTile => const { &[p("M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17zM10.3 8.9v6.2l4.9-3.1z")] },
+            Icon::Terminal => const { &[p("M4 6.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM7.8 9.5l2.8 2.5-2.8 2.5M12.6 15h3.8")] },
+            Icon::Letters => const { &[p("M3.5 18L8 6.5h1L13.5 18M5.2 14h6.6M20 12.2v5.8M20 15a2.2 2.2 0 1 1 0-0.01")] },
+            Icon::Lines => const { &[p("M5 7h14M5 11h14M5 15h14M5 19h8")] },
+            Icon::Halves => const { &[p("M4 6.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM12 4.5v15")] },
+            Icon::Eye => const { &[p("M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6zM12 9.3a2.7 2.7 0 1 1 0 5.4a2.7 2.7 0 1 1 0-5.4z")] },
+            // `M8 5.5v13l10.5-6.5z` with `fill-opacity: 0.18`: the run button's triangle, tinted inside.
+            Icon::Start => const { &[Part::veiled(Shape::Path("M8 5.5v13l10.5-6.5z"), 0.18)] },
         }
     }
 }
