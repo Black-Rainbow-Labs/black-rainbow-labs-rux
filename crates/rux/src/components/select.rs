@@ -449,6 +449,10 @@ impl<'a> Select<'a> {
                         theme.accent.blue,
                     );
                 }
+                // Named by its words, so a row can be found by a test and read out by a screen reader.
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(egui::WidgetType::Button, true, is_selected, option.as_str())
+                });
                 if response.clicked() {
                     chosen = Some(index);
                 }
