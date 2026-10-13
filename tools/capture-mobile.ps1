@@ -21,7 +21,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$exe = Join-Path $root 'target/release/rux-mobile-preview.exe'
+# A build with CARGO_TARGET_DIR set puts the program there instead of under target/.
+$targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $root 'target' }
+$exe = Join-Path $targetDir 'release/rux-mobile-preview.exe'
 if (-not (Test-Path $exe)) { throw "Build it first: cargo build --release. Looked for $exe" }
 
 if ($Devices.Count -eq 0) {

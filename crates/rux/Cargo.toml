@@ -5,8 +5,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Black-Rainbow-Labs/black-rainbow-labs-rux"
+readme = "../../README.md"
 
 [dependencies]
 egui.workspace = true
 vello_cpu.workspace = true
 kurbo.workspace = true
+
+[dev-dependencies]
+eframe.workspace = true

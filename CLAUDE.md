@@ -229,3 +229,18 @@ are `theme::Chat`. Two rules keep that from becoming a second style:
 
 A slice of a `Ring` too short for two round caps is drawn with square ends at exactly its share, and the
 gap between slices is the same everywhere; `dial::arc_segments` and its tests are that arithmetic.
+
+## The documentation is part of the change (task-2259)
+
+`docs/` is the reference for anybody using rux, and the repository is public. A change that alters what a
+component looks like or how it is called updates, in the same commit:
+
+- the component's page under `docs/components/`, and the table in `docs/components/README.md`;
+- its pictures, with `pwsh tools/capture-docs.ps1 -Stories <story>`, which takes both themes and the open
+  states. Never edit a picture by hand;
+- the storybook story, so the picture shows the new state. A new component gets a story, a page and a row
+  in the table.
+
+`docs/writing-style.md` is how the pages are written. `crates/rux/examples/first_window.rs` is the program
+`docs/getting-started.md` walks through, and it is built by `cargo build -p rux --examples`, so a change to
+the API that breaks that page breaks the build.

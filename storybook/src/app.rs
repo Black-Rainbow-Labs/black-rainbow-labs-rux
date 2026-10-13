@@ -31,6 +31,9 @@ pub struct Storybook {
     scroll: Vec<f32>,
     /// Whether the measurement strip along the bottom of the sidebar is showing.
     measuring: bool,
+    /// How far to scroll the chosen story on the first frame, which `--scroll` sets so a capture pass
+    /// can photograph a story taller than the screen in slices.
+    pending_scroll: Option<f32>,
 }
 
 impl Storybook {
@@ -50,6 +53,7 @@ impl Storybook {
             demo: Demo::default(),
             scroll,
             measuring,
+            pending_scroll: None,
         }
     }
 
@@ -288,7 +292,16 @@ impl Storybook {
         offset = bar.grab(rux, offset);
         if rux.ui.ctx().pointer_latest_pos().is_some_and(|at| body.contains(at)) {
             let wheel = rux.ui.ctx().input(|input| input.smooth_scroll_delta.y);
+            if wheel != 0.0 {
+                self.pending_scroll = None;
+            }
             offset = (offset - wheel).clamp(0.0, (content - body.height()).max(0.0));
+        }
+        // `--scroll` holds the page where it was asked to be until the wheel moves it. It is applied
+        // after the scrollbar's own clamp, because on the first frame the story's height is not known
+        // and the clamp would put it back at the top.
+        if let Some(points) = self.pending_scroll {
+            offset = points.max(0.0);
         }
 
         let was = rux.ui.clip_rect();
@@ -307,6 +320,15 @@ impl Storybook {
         // What the page really came out at, which the next frame's scrollbar reads. Measured rather
         // than declared, because a story's height depends on the fonts and the width.
         self.scroll[self.chosen] = drawn;
+    }
+
+    /// Start with the chosen story scrolled down by this many points.
+    ///
+    /// The offset is held until the wheel moves the page, and it is not limited to the story's height.
+    /// A capture past the end of a story shows an empty page, which is how a capture pass knows it has
+    /// reached the end.
+    pub fn scroll_to(&mut self, points: f32) {
+        self.pending_scroll = Some(points);
     }
 
     /// Start with the sidebar filtered, as though it had been typed in.
@@ -412,6 +434,7 @@ mod tests {
                 demo: Demo::default(),
                 scroll: vec![0.0; stories.len()],
                 measuring: false,
+                pending_scroll: None,
             };
             let names: Vec<&str> =
                 storybook.matching().into_iter().map(|index| stories[index].name).collect();

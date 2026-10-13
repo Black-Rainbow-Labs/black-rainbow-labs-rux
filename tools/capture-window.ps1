@@ -73,7 +73,9 @@ $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $hdc = $graphics.GetHdc()
 try {
     # 0x00000002 is PW_RENDERFULLCONTENT, which is what makes this work on a composited window.
-    $ok = [Rux.Win]::PrintWindow($handle, $hdc, 2)
+    # 0x00000001 is PW_CLIENTONLY. Without it the window draws its title bar into the top of a bitmap
+    # the size of its client area, so the picture lost its bottom 31 pixels to a title bar.
+    $ok = [Rux.Win]::PrintWindow($handle, $hdc, 3)
 } finally {
     $graphics.ReleaseHdc($hdc)
 }

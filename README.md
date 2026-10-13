@@ -1,44 +1,89 @@
-# black-rainbow-labs-rux
+# rux
 
-A private Black Rainbow Labs component library for Rust, written the way the Unluminous editor is
-written: `egui` for input, hit testing, scrolling and text, and `vello_cpu` for the decoration
-`epaint` cannot draw.
+**Neumorphic components for Rust, drawn on `egui`.**
 
-It ships two neumorphic themes transcribed from ai-service's own stylesheets, nineteen components
-transcribed from the AI Studio design, an example page that rebuilds that design out of those
-components, a desktop storybook that shows every component in every state, and **a mobile application
-for iOS and Android built out of the same components**.
+rux is the Black Rainbow Labs component library. It draws soft, tactile components in which every control
+is made of the page's own colour and raised or pressed by shadows, on top of `egui`. The same components
+run on Windows, macOS, Linux, iOS and Android. Unluminous, the Black Rainbow Labs code editor, draws its
+chat pane, its task board and its Settings window with rux.
 
+[Documentation](docs/README.md) &nbsp;·&nbsp;
+[Getting started](docs/getting-started.md) &nbsp;·&nbsp;
+[Components](docs/components/README.md) &nbsp;·&nbsp;
+[Storybook](#the-storybook)
+
+![The rux storybook in the dark theme, showing the Agent-Chat parts: a dial, a ring chart, slider tracks, an area chart and readouts](docs/images/storybook--dark-neumorphic.png)
+
+## Features
+
+- Two themes, `light-neumorphic` and `dark-neumorphic`, each a fixed list of tokens copied from the
+  ai-service stylesheets. A component reads the theme and never names a colour.
+- Buttons, fields, selects, toggles, navigation, surfaces, chips, loaders and dialogs, copied from the AI
+  Studio design and checked against its stylesheet by a test that parses the CSS.
+- Instrument controls drawn as hardware: key caps that sink, LEDs, faders, meters, charts, tables and
+  timelines.
+- The Agent-Chat parts Unluminous's chat pane uses: dials, ring charts, slider tracks, area charts,
+  readouts, pill and round buttons, status wells, and cards for commands, code, changes, permission
+  requests and errors.
+- The Agent-Tasks parts Unluminous's task board uses: a view switch, a sprint ring, lanes, task cards and
+  the ticket form's fields.
+- Inset shadows, diagonal gradients, glows and rounded clips, which `egui`'s own renderer cannot draw,
+  drawn by `vello_cpu`.
+- A frame where nothing moved draws no decoration. A hover changes a vertex colour.
+- 63 icons, Inter and JetBrains Mono included, and a flexbox and grid layout solver.
+- The same components on iOS and Android, with 44 point touch targets, safe areas and bottom sheets.
+- A desktop storybook that shows every component in every state in both themes.
+
+## Pictures
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/chat-parts/light-neumorphic.png" alt="The Agent-Chat parts in the light theme"><br><b>Agent-Chat parts</b>, light theme. <a href="docs/components/agent-chat.md">Read more</a></td>
+<td width="50%"><img src="docs/images/board-parts/dark-neumorphic.png" alt="The Agent-Tasks board parts in the dark theme"><br><b>Agent-Tasks parts</b>: lanes, task cards and the ticket fields. <a href="docs/components/agent-tasks.md">Read more</a></td>
+</tr>
+<tr>
+<td><img src="docs/images/image-creator/light-neumorphic.png" alt="The Image Creator example page in the light theme"><br><b>A whole page</b>: the Image Creator, rebuilt from the components. <a href="docs/examples.md">Read more</a></td>
+<td><img src="docs/images/instruments/dark-neumorphic.png" alt="The instrument controls in the dark theme"><br><b>Instruments</b>: keys, a fader, a meter, a chart and a timeline. <a href="docs/components/instruments.md">Read more</a></td>
+</tr>
+<tr>
+<td><img src="docs/images/button/dark-neumorphic.png" alt="Buttons in the dark theme"><br><b>Buttons</b> in seven variants and four sizes. <a href="docs/components/buttons.md">Read more</a></td>
+<td><img src="docs/images/select/light-neumorphic--open.png" alt="Selects with their menus open, light theme"><br><b>Selects</b>, with their menus open. <a href="docs/components/fields.md">Read more</a></td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td><img src="docs/images/mobile/dark-neumorphic--iphone-16--create.png" alt="The mobile application on an iPhone 16, dark theme" width="230"></td>
+<td><img src="docs/images/mobile/light-neumorphic--iphone-16--controls.png" alt="The mobile application's controls on an iPhone 16, light theme" width="230"></td>
+<td><img src="docs/images/mobile/dark-neumorphic--pixel-8--gallery.png" alt="The mobile application's gallery on a Pixel 8, dark theme" width="230"></td>
+</tr>
+</table>
+
+The same components on a phone, in the mobile preview. [Mobile](docs/mobile.md) covers what changes.
+
+## Documentation
+
+The pages are listed in [docs/README.md](docs/README.md). Good places to start:
+
+| Page | What it covers |
+|---|---|
+| [Product overview](docs/product-overview.md) | what rux is, who it is for, and how it compares with `egui` on its own |
+| [Getting started](docs/getting-started.md) | the dependency, the three calls every frame makes, and a whole first window |
+| [Components](docs/components/README.md) | every component, with pictures, code and every builder method |
+| [Themes](docs/themes.md) | every token, both themes, and a theme made from another application's colours |
+| [Layout](docs/layout.md) | measuring and placing components with `Flex`, `Grid` and `Pen` |
+| [How rux draws](docs/architecture.md) | `egui` and `vello_cpu` together, and why a still frame costs nothing |
+| [Mobile](docs/mobile.md) | touch targets, safe areas, sheets, and the iOS and Android builds |
+| [Repository and building](docs/repository.md) | the crates, the commands and the conventions |
+
+## Quick start
+
+```toml
+[dependencies]
+rux = { git = "https://github.com/Black-Rainbow-Labs/black-rainbow-labs-rux.git", rev = "<commit>" }
+egui = "0.36"
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts", "accesskit"] }
 ```
-crates/rux/          the library, and the only crate a consumer depends on
-examples/pages/      the Image Creator page, rebuilt from the components
-storybook/           the desktop storybook
-mobile/              the mobile application, and the three shells that run it
-reference/           the stylesheets and source everything here is measured against
-tasks/               the design
-```
-
-## Running it
-
-```sh
-cargo run --release -p rux-storybook
-cargo run --release -p rux-storybook -- --theme light-neumorphic
-cargo run --release -p rux-storybook -- --list
-
-# the same components on a phone, at a real device's size with its safe area
-cargo run --release -p rux-mobile-preview
-cargo run --release -p rux-mobile-preview -- --device iphone-se --theme light-neumorphic
-
-pwsh mobile/android/build-android.ps1     # build, install and launch on Android
-pwsh mobile/ios/build-ios.ps1             # compile, link, bundle and sign for iOS, on Windows
-```
-
-The storybook has a theme picker at the top left, a filter over every story and state, a page per
-component and a page per example, all live and interactive. `--help` lists the rest of the switches;
-`--story`, `--filter`, `--open` and `--background` exist so a capture pass can reach any state
-without touching the keyboard or the pointer.
-
-## Using it
 
 ```rust
 use rux::prelude::*;
@@ -47,84 +92,86 @@ use rux::prelude::*;
 rux::text::install(ctx);
 let state = RuxState::new(Theme::named("dark-neumorphic").unwrap());
 
-// Every frame. `layer` reserves the slot the decoration is painted into, hands you a `Rux`, and
-// fills the slot in once you are done.
+// Every frame.
 rux::layer(ui, &state, egui::Id::new("page"), area, |rux| {
     rux.ground(area);
-    let [left, right] = Flex::row(area).pad(Pad::all(20.0)).gap(12.0).fill(1.0).hug(140.0).solve();
-    if Button::new("Create").primary().icon(Icon::Spark).show(rux, right).clicked() {
-        // …
+    let [field, button] = Flex::row(area).pad(Pad::all(20.0)).gap(12.0).fill(1.0).hug(140.0).solve();
+    TextInput::search(&mut query).hint("Search").show(rux, field);
+    if Button::new("Create").primary().icon(Icon::Spark).show(rux, button).clicked() {
+        // ...
     }
 });
 state.end_frame();
 ```
 
-Every component is the same shape:
-
-```rust
-fn measure(&self, rux: &Rux) -> Vec2;                 // what it wants, before anybody places it
-fn show(self, rux: &mut Rux, rect: Rect) -> Response; // draws into the rect it is given
-```
-
-and keeps three rules. A component **decides nothing about the application** — it draws, it answers
-what happened, and state that has to survive a frame is the caller's, which is what lets the same
-component appear twice on one screen. It **reads the theme and never a colour**; there is no
-`Color32::from_rgb` anywhere in `components/`. And it **sets the cursor the stylesheet sets**.
-
-## What is in it
-
-| | |
-|---|---|
-| **Themes** | `light-neumorphic` and `dark-neumorphic`, each a closed set of surfaces, shadow tones, ink, accents, semantic colours, radii, twelve elevations and twelve gradients |
-| **Components** | top nav, button, icon button, select, project menu, text input, text area, stepper, spinner / progress / skeleton, chip, segmented control, dice toggle, switch, panel, well, collapsible group, divider, list item, avatar, tile, scrollbar, modal |
-| **Icons** | all thirty-seven `SbIcon` marks, path data verbatim, rasterised into a tinted texture atlas |
-| **Type** | Inter 400/500/600/700 and JetBrains Mono 400/500/600, vendored, with `letter-spacing` and `line-height` carried through |
-| **Layout** | a flex row/column/grid solver with gap, padding, align, justify, `flex-shrink: 0` and `repeat(auto-fill, minmax())` |
-
-## Pixel perfect, and how that is checked
-
-`reference/` holds the stylesheets this was built from: the AI Studio Image Creator page's own CSS,
-its React source, the shared `SbIcon` / `TopNav` / `ProjectDropdown` source, and ai-service's
-`neumorphic-tokens.css` and `incognito-theme.css`.
-
-`crates/rux/tests/reference.rs` **reads those files at test time and parses them**. Every colour in
-both themes, every radius, every shadow offset and blur, the padding and gap of every component the
-design names, the whole type scale and every icon name is compared against the declaration it was
-transcribed from. That is stronger than comparing two pictures: a screenshot can only say two images
-differ, where this says which declaration is wrong.
+A whole program is in `crates/rux/examples/first_window.rs`:
 
 ```sh
-cargo test                                   # 59 tests, none of which needs a graphics card
-pwsh tools/capture-stories.ps1               # every story, both themes, into _agent_output/
+cargo run --release -p rux --example first_window
 ```
 
-## Measured
+Every component has the same two methods. `measure(&self, rux)` answers how big it wants to be, and
+`show(self, rux, rect)` draws it into the rectangle it is given and answers what happened. A component
+decides nothing about the application, reads the theme instead of naming a colour, and sets the cursor
+the stylesheet sets.
 
-Release build, 1440×920, on this machine:
+## The storybook
 
-| | |
-|---|---:|
-| Working set, a component story | 188 MB |
-| Working set, the example page | 194 MB |
-| Idle, nothing animating | 0–8 ms of processor time a second |
-| The example page, three spinners at 60 fps | 253 ms/s, with the canvas rasterised **once** |
-| Decoration texture, full window | 5,175 KB |
-| Icon atlas, thirty marks | 36 KB |
-| Binary | 16.7 MB |
+```sh
+cargo run --release -p rux-storybook
+cargo run --release -p rux-storybook -- --theme light-neumorphic --story "Board Parts"
+cargo run --release -p rux-storybook -- --list
+```
 
-Most of the working set is the graphics driver rather than anything here — Unluminous measured a DX12
-device and egui's shader at 135 MB of a 223 MB window, and this is the same stack.
+The storybook shows every component in every state, live and interactive, in both themes. The theme
+picker is at the top left and a filter over every story and state is under it. Its own theme picker and
+filter are rux's `Select` and `TextInput`.
 
-The number that matters is the third row: a page animating three spinners at sixty frames a second
-rasterises its decoration **once**, because nothing that moves is allowed into the `Decor` list. The
-spinner's arc and every icon are textures, and flat hover washes are `egui` shapes.
+`--background`, `--story`, `--open`, `--size` and `--scroll` reach any state from the command line, so
+`pwsh tools/capture-docs.ps1` takes every picture in `docs/images/` without a keystroke or a click.
 
-## The conventions
+## On a phone
 
-`CLAUDE.md` is what a later change has to follow. `tasks/task-2008-rux-tdd.md` is the design, and
-records what was weighed and refused.
+```sh
+cargo run --release -p rux-mobile-preview -- --device iphone-16
+pwsh mobile/android/build-android.ps1     # build, install and launch on Android
+pwsh mobile/ios/build-ios.ps1             # compile, link, bundle and sign for iOS, on Windows
+```
 
-## Licences
+An application says what device it is on once a frame, with `state.set_screen(Screen::phone(size,
+insets))`. Every control is then at least 44 points tall, a dialog comes up from the bottom edge, the
+nav strip fits the width, and nothing has a hover state. The desktop behaviour does not change.
 
-The library is private to Black Rainbow Labs. The vendored faces are not: Inter and JetBrains Mono
-are both SIL Open Font License, and their licences are in `crates/rux/assets/fonts/`.
+## How it is checked
+
+```sh
+cargo test -p rux      # 109 tests, none of which needs a graphics card
+```
+
+`crates/rux/tests/reference.rs` reads the AI Studio stylesheets in `reference/` when it runs, parses them,
+and compares every colour in both themes, every radius, every shadow, the padding and gap of every
+component and the whole type scale with the declaration it was copied from. A changed token fails a test
+that names the declaration. `tests/draw.rs` draws every component in both themes on a desktop and on a
+phone in a debug build. [Testing](docs/testing.md) describes the rest.
+
+## Repository
+
+```
+crates/rux/        the library, and the only crate a program depends on
+examples/          the Image Creator page, rebuilt from the components
+storybook/         the desktop storybook
+mobile/            the mobile application, its preview, and the iOS and Android shells
+reference/         the stylesheets and source the original components were copied from
+docs/              the documentation, and its pictures
+tasks/             the design documents
+tools/             the capture scripts
+```
+
+`CLAUDE.md` holds the conventions a change has to follow. `tasks/task-2008-rux-tdd.md` is the design of
+the library and `tasks/task-2032-rux-mobile-tdd.md` is the design of the phone support.
+
+## Licence
+
+rux is dual licensed under the [MIT licence](LICENSE-MIT) and the [Apache licence 2.0](LICENSE-APACHE),
+at your choice. The included faces, Inter and JetBrains Mono, are under the SIL Open Font License, and
+their licences are in `crates/rux/assets/fonts/`.

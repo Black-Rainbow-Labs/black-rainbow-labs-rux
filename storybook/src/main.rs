@@ -41,6 +41,16 @@ struct Arguments {
     open: bool,
     /// Start with the sidebar filtered, which is how the filter's own state is photographed.
     filter: Option<String>,
+    /// Open the window at this inner size, in points, instead of 1440 by 920.
+    ///
+    /// A story is taller than the default window, and a photograph of the window shows only its top.
+    /// `--size 1440x2400` lets a capture pass show a whole story without scrolling it.
+    size: Option<[f32; 2]>,
+    /// Open the story scrolled down by this many points.
+    ///
+    /// Windows will not make a window taller than the screen, so a story taller than that is
+    /// photographed in slices, one `--scroll` each.
+    scroll: Option<f32>,
 }
 
 fn main() -> eframe::Result<()> {
@@ -56,7 +66,7 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1440.0, 920.0])
+            .with_inner_size(arguments.size.unwrap_or([1440.0, 920.0]))
             .with_min_inner_size([760.0, 560.0])
             .with_active(!arguments.background)
             .with_title("RUX Storybook"),
@@ -87,6 +97,9 @@ fn main() -> eframe::Result<()> {
             }
             if let Some(filter) = &arguments.filter {
                 storybook.set_filter(filter);
+            }
+            if let Some(points) = arguments.scroll {
+                storybook.scroll_to(points);
             }
             Ok(Box::new(Application { storybook, state }))
         }),
@@ -128,6 +141,8 @@ fn read_arguments(
         story: None,
         open: false,
         filter: None,
+        size: None,
+        scroll: None,
     };
     let mut arguments = arguments.peekable();
     while let Some(argument) = arguments.next() {
@@ -147,6 +162,15 @@ fn read_arguments(
             "--filter" => match arguments.next() {
                 Some(text) => out.filter = Some(text),
                 None => return Err("--filter needs some text after it".to_owned()),
+            },
+            "--size" => match arguments.next().as_deref().map(read_size) {
+                Some(Ok(size)) => out.size = Some(size),
+                Some(Err(problem)) => return Err(problem),
+                None => return Err("--size needs a width and a height after it, like 1440x2400".to_owned()),
+            },
+            "--scroll" => match arguments.next().map(|text| text.parse::<f32>()) {
+                Some(Ok(points)) if points >= 0.0 => out.scroll = Some(points),
+                _ => return Err("--scroll needs a number of points after it, like 1800".to_owned()),
             },
             "--help" | "-h" => {
                 println!("{USAGE}");
@@ -170,6 +194,18 @@ fn read_arguments(
     Ok(Some(out))
 }
 
+/// Read `<width>x<height>` in points, such as `1440x2400`.
+fn read_size(text: &str) -> Result<[f32; 2], String> {
+    let refuse = || format!("--size takes a width and a height, like 1440x2400, and {text:?} is not one");
+    let (width, height) = text.split_once(['x', 'X']).ok_or_else(refuse)?;
+    let width: f32 = width.trim().parse().map_err(|_| refuse())?;
+    let height: f32 = height.trim().parse().map_err(|_| refuse())?;
+    if width < 760.0 || height < 560.0 {
+        return Err(format!("--size {text} is smaller than the smallest window, 760x560"));
+    }
+    Ok([width, height])
+}
+
 const USAGE: &str = "\
 rux-storybook — every rux component, every state, both themes.
 
@@ -177,6 +213,8 @@ rux-storybook — every rux component, every state, both themes.
     --story <name>   open straight onto a story, by name. `--list` prints them
     --open           open the dropdowns and the dialog, for photographing those states
     --filter <text>  start with the sidebar filtered
+    --size <WxH>     open the window at this size in points, such as 1440x2400
+    --scroll <n>     open the story scrolled down by this many points
     --measure        show what the library is holding, along the bottom of the sidebar
     --background     open without taking the foreground, for a script that drives it
     --list           print every story and exit
@@ -204,5 +242,22 @@ mod tests {
         assert!(arguments.measure);
         assert_eq!(arguments.theme.as_deref(), Some("light-neumorphic"));
         assert!(read(&["--theme"]).is_err(), "a theme with no name after it is a mistake");
+    }
+
+    #[test]
+    fn a_size_is_read_as_a_width_and_a_height() {
+        let arguments = read(&["--size", "1440x2400"]).unwrap().unwrap();
+        assert_eq!(arguments.size, Some([1440.0, 2400.0]));
+        assert!(read(&["--size", "wide"]).is_err());
+        assert!(read(&["--size", "300x200"]).is_err(), "smaller than the smallest window");
+        assert!(read(&["--size"]).is_err());
+    }
+
+    #[test]
+    fn a_scroll_is_a_number_of_points() {
+        let arguments = read(&["--scroll", "1800"]).unwrap().unwrap();
+        assert_eq!(arguments.scroll, Some(1800.0));
+        assert!(read(&["--scroll", "down"]).is_err());
+        assert!(read(&["--scroll", "-5"]).is_err());
     }
 }
