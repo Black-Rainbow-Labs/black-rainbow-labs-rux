@@ -318,6 +318,22 @@ impl<'a> Rux<'a> {
         self.ui.painter().rect_filled(rect, radius, colour);
     }
 
+    /// Where the pointer last was, in the points this `Ui`'s layer is drawn in.
+    ///
+    /// `Context::pointer_latest_pos` answers in the window's points, and a layer drawn through a transform,
+    /// such as a zoomed modal, a canvas node or an overlay opened from either, lays its rectangles out in its
+    /// own. Compared directly, the two agree only at a zoom of one, so a select's menu in a modal zoomed to
+    /// 1.25 took a press on its own rows for a press outside and closed before the row was chosen (Unluminous
+    /// `task-2277`). A widget that asks "is the pointer over this rectangle" asks this.
+    pub fn pointer(&self) -> Option<egui::Pos2> {
+        let ctx = self.ui.ctx();
+        let at = ctx.pointer_latest_pos()?;
+        Some(match ctx.layer_transform_to_global(self.ui.layer_id()) {
+            Some(to_global) => to_global.inverse() * at,
+            None => at,
+        })
+    }
+
     /// Open a foreground layer of this library's own — a dropdown menu, a context menu, a modal.
     ///
     /// It is a layer rather than a painted rectangle because `egui` orders and hit-tests foreground

@@ -82,10 +82,7 @@ impl Scrollbar {
         let theme = rux.theme();
         let thumb = self.thumb(offset);
         let hovered = rux.screen().pointer.hovers()
-            && rux
-                .ui
-                .ctx()
-                .pointer_latest_pos()
+            && rux.pointer()
                 .is_some_and(|at| thumb.expand2(Vec2::new(8.0, 0.0)).contains(at));
         // Quiet it is the sunken surface; under the pointer it is the ink, which is the one place the
         // reference's own `::-webkit-scrollbar-thumb` colour is not quite enough to see.

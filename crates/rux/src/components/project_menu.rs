@@ -234,10 +234,7 @@ impl<'a> ProjectMenu<'a> {
                 let galley = rux.text(style, create_label, ink);
                 crate::text::draw_left_centre(rux.ui.painter(), label.left_center(), galley, ink);
 
-                let inside = rux
-                    .ui
-                    .ctx()
-                    .pointer_latest_pos()
+                let inside = rux.pointer()
                     .is_some_and(|at| area.contains(at));
                 (chosen, create, inside)
             });

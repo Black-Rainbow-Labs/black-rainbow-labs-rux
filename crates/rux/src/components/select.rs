@@ -388,10 +388,7 @@ impl<'a> Select<'a> {
                 rux.chrome.rect(grab, SHEET_GRABBER.y / 2.0, theme.surface.sunken);
             }
 
-            let pointer_inside = rux
-                .ui
-                .ctx()
-                .pointer_latest_pos()
+            let pointer_inside = rux.pointer()
                 .is_some_and(|at| area.contains(at));
             if pointer_inside && max_scroll > 0.0 {
                 let wheel = rux.ui.ctx().input(|input| input.smooth_scroll_delta.y);
