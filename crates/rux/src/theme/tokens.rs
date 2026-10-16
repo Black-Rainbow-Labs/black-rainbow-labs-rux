@@ -479,7 +479,7 @@ impl Chat {
             card,
             // `--well: rgba(6, 8, 14, 0.42)`.
             well: rgba(0x06080E, 0.42),
-            light: Color32::WHITE.at(0.10),
+            light: Color32::WHITE.at(0.05),
             dark: Color32::BLACK.at(0.38),
             // `--grad: linear-gradient(135deg, rgba(61,120,255,.88), rgba(92,182,255,.72))`.
             action: Gradient::at(135.0, rgba(0x3D78FF, 0.88), rgba(0x5CB6FF, 0.72)),
@@ -497,8 +497,8 @@ impl Chat {
             chip: card,
             chip_light: Color32::WHITE.at(0.42),
             chip_dark: Color32::BLACK.at(0.34),
-            chip_edge: Color32::WHITE.at(0.16),
-            chip_top: Color32::WHITE.at(0.42),
+            chip_edge: Color32::WHITE.at(0.07),
+            chip_top: Color32::WHITE.at(0.10),
             done: Gradient::at(135.0, rgba(0x2FB98F, 0.9), rgba(0x3AD6AD, 0.8)),
             glass: true,
         }
@@ -506,13 +506,17 @@ impl Chat {
 
     /// `--out`: a card under glass. A long soft fall, a lit top edge, a faint lit bottom edge, a hairline
     /// rim and a faint glow inside.
+    ///
+    /// The lit edges are softer than the design's (`task-2281`, second pass): the design's one point
+    /// line at 38% white read as a hard white stroke along the top of every card over a dark picture, so
+    /// the top is a glow two points down and four across at 9%, and the rim is half as strong.
     fn glass_out() -> Elevation {
         Elevation::of([
             Shadow::outer(0.0, 16.0, 36.0, Color32::BLACK.at(0.38)),
-            Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.38)),
-            Shadow::inset(0.0, -1.0, 0.0, Color32::WHITE.at(0.10)),
-            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.14)).spread(1.0),
-            Shadow::inset(0.0, 0.0, 22.0, Color32::WHITE.at(0.05)),
+            Shadow::inset(0.0, 2.0, 4.0, Color32::WHITE.at(0.09)),
+            Shadow::inset(0.0, -1.0, 2.0, Color32::WHITE.at(0.03)),
+            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.07)).spread(1.0),
+            Shadow::inset(0.0, 0.0, 22.0, Color32::WHITE.at(0.04)),
         ])
     }
 
@@ -520,9 +524,9 @@ impl Chat {
     fn glass_out_sm() -> Elevation {
         Elevation::of([
             Shadow::outer(0.0, 6.0, 16.0, Color32::BLACK.at(0.34)),
-            Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.42)),
-            Shadow::inset(0.0, -1.0, 0.0, Color32::WHITE.at(0.10)),
-            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.16)).spread(1.0),
+            Shadow::inset(0.0, 2.0, 3.0, Color32::WHITE.at(0.10)),
+            Shadow::inset(0.0, -1.0, 2.0, Color32::WHITE.at(0.03)),
+            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.08)).spread(1.0),
         ])
     }
 
@@ -569,8 +573,8 @@ impl Chat {
             return Elevation::of([
                 // `--in`: a dark fall inside the top, a hairline rim, and a lit line under the bottom.
                 Shadow::inset(0.0, 1.0, 3.0, Color32::BLACK.at(0.35)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.10)).spread(1.0),
-                Shadow::outer(0.0, 1.0, 0.0, Color32::WHITE.at(0.06)),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.06)).spread(1.0),
+                Shadow::outer(0.0, 1.0, 1.0, Color32::WHITE.at(0.03)),
             ]);
         }
         Elevation::of([
@@ -585,7 +589,7 @@ impl Chat {
             return Elevation::of([
                 // `--in-sm`.
                 Shadow::inset(0.0, 1.0, 2.0, Color32::BLACK.at(0.30)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.08)).spread(1.0),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.05)).spread(1.0),
             ]);
         }
         Elevation::of([
@@ -600,8 +604,8 @@ impl Chat {
             return Elevation::of([
                 // `--grad-out`.
                 Shadow::outer(0.0, 6.0, 20.0, self.action_glow),
-                Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.45)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.22)).spread(1.0),
+                Shadow::inset(0.0, 2.0, 3.0, Color32::WHITE.at(0.16)),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.10)).spread(1.0),
             ]);
         }
         Elevation::of([
@@ -626,8 +630,8 @@ impl Chat {
                 // The Chat settings dialog under glass: `0 24px 60px rgba(0,0,0,.5)`, a lit top edge
                 // and a hairline rim.
                 Shadow::outer(0.0, 24.0, 60.0, Color32::BLACK.at(0.50)),
-                Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.25)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.14)).spread(1.0),
+                Shadow::inset(0.0, 2.0, 4.0, Color32::WHITE.at(0.08)),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.07)).spread(1.0),
             ]);
         }
         Elevation::of([

@@ -64,6 +64,14 @@ raised out of it.
 `render::glass::shapes` is public, for an application that paints a surface with egui directly and wants
 it to be glass too. Unluminous uses it for egui's own popup frames and for its canvas nodes.
 
+## The lit edges are faint
+
+The rim and the top highlight of a glass surface are a few percent of white: 7% for a card's rim and 9%
+for its top edge, 5% to 7% for a carved track. The first version used the design's own values, about
+twice that, and over a dark picture each card and button had a white line along its top that stood out
+from everything around it. Jason asked for them to blend in (task-2281, second pass). The values are in
+`Chat::glass` and the `glass_*` elevations in `theme/tokens.rs`.
+
 ## What it costs
 
 A piece of glass is about four hundred vertices, drawn three times, one for each colour channel. The
