@@ -38,17 +38,18 @@ need.
 | | Page | What it covers |
 |---|---|---|
 | 17 | [Themes](themes.md) | Every token, the two themes, the Agent-Chat values, and a theme made from another application's colours |
-| 18 | [Layout](layout.md) | `Flex`, `Grid`, `Pen` and `Pad`, and how components are measured and placed |
-| 19 | [How rux draws](architecture.md) | `egui` and `vello_cpu` together, layers, the rule that keeps a still frame free, and the measurements |
-| 20 | [Mobile](mobile.md) | What a component does differently on a phone, the mobile preview, and the iOS and Android builds |
+| 18 | [Glass](glass.md) | A glazed theme, whose raised surfaces bend the picture behind the window, and how to give it a picture |
+| 19 | [Layout](layout.md) | `Flex`, `Grid`, `Pen` and `Pad`, and how components are measured and placed |
+| 20 | [How rux draws](architecture.md) | `egui` and `vello_cpu` together, layers, the rule that keeps a still frame free, and the measurements |
+| 21 | [Mobile](mobile.md) | What a component does differently on a phone, the mobile preview, and the iOS and Android builds |
 
 ## Working on it
 
 | | Page | What it covers |
 |---|---|---|
-| 21 | [Repository and building](repository.md) | The crates, the commands, the capture tools, the conventions and the versions that have to match |
-| 22 | [Testing](testing.md) | The four layers of tests, the reference check, and how the pictures are taken |
-| 23 | [Writing style](writing-style.md) | How to write and keep a page in this folder correct |
+| 22 | [Repository and building](repository.md) | The crates, the commands, the capture tools, the conventions and the versions that have to match |
+| 23 | [Testing](testing.md) | The four layers of tests, the reference check, and how the pictures are taken |
+| 24 | [Writing style](writing-style.md) | How to write and keep a page in this folder correct |
 | | [`CLAUDE.md`](../CLAUDE.md) | The conventions a change has to follow, with the reason for each |
 | | [`tasks/`](../tasks) | The design documents, with the options that were weighed and refused |
 

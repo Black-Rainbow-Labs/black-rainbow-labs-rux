@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use egui::Color32;
 
 pub use tokens::{
-    rgb, rgba, with_opacity, Accents, Chat, Elevation, Elevations, Gradient, Gradients, Ink, Opacity,
+    rgb, rgba, with_opacity, Accents, Chat, Elevation, Elevations, Glass, Gradient, Gradients, Ink, Opacity,
     Radii, Semantic, Shadow, ShadowTones, Surfaces,
 };
 
@@ -66,6 +66,9 @@ pub struct Theme {
     pub gradient: Gradients,
     /// The Agent-Chat design's own values, worked out from `surface.s1`. See [`Chat`].
     pub chat: Chat,
+    /// The material raised surfaces are made of: `None` is the neumorphic surfaces both shipped themes
+    /// have, and `Some` is glass that bends the picture behind it. See [`Theme::glazed`].
+    pub glass: Option<Glass>,
 }
 
 impl Theme {
@@ -109,8 +112,65 @@ impl Theme {
         theme.interaction.focus_ring = with_opacity(blue, 0.65);
         theme.elevation = elevations(&theme.shadow, &theme.accent, &theme.gradient);
         theme.chat = Chat::lit_from(surface.s1, theme.dark);
+        theme.glass = None;
         theme
     }
+
+    /// This theme made of glass (`task-2281`): every raised surface bends the picture behind it, and
+    /// its tint, edges and shadows are the glass design's.
+    ///
+    /// The Claude Design canvas "Unluminous", page "Agent-Chat 2". **This is the one place a theme
+    /// changes recipes rather than values**, and it is deliberate: glass is a material, and the design
+    /// draws depth with a long soft fall and lit edges where neumorphism draws it with a light and a dark
+    /// shadow either side. Components are unchanged: a component asks for a raised surface and
+    /// `render::Chrome` decides it is glass. The ink and the accents are this theme's own, so a glazed
+    /// theme reads the way the theme it was made from reads.
+    ///
+    /// `ground` is the colour the design's pane is. Under glass it is laid over the picture at a little
+    /// under half strength, which is the design's modal (`rgba(12, 14, 22, 0.40)` under a faint sheen):
+    /// a pane or a dialog painted in it is itself a raised translucent surface, so it is glass too.
+    pub fn glazed(&self, name: &'static str, ground: Color32) -> Theme {
+        let mut theme = *self;
+        theme.name = name;
+        theme.dark = true;
+        theme.glass = Some(Glass::DESIGN);
+        theme.chat = Chat::glass(with_opacity(ground, 0.46));
+        let chat = theme.chat;
+        // The page and the panels are a light smoke, so the picture behind them is seen; a surface one
+        // step up is the card's tint, and a sunken one is the design's well.
+        theme.surface = Surfaces {
+            s0: rgba(0x080A10, 0.22),
+            s1: rgba(0x0A0C14, 0.30),
+            s2: chat.card.from,
+            s3: chat.card.from,
+            sunken: chat.well,
+        };
+        theme.shadow = ShadowTones {
+            light: Color32::WHITE.at(0.10),
+            dark: Color32::BLACK.at(0.38),
+            darker: Color32::BLACK.at(0.50),
+        };
+        theme.interaction.hover = Color32::WHITE.at(0.06);
+        theme.interaction.pressed = Color32::WHITE.at(0.10);
+        theme.interaction.hairline = Color32::WHITE.at(0.10);
+        theme.interaction.scrim = rgba(0x06080C, 0.42);
+        theme.elevation = Elevations {
+            raised_sm: chat.raised_sm(),
+            raised: chat.raised(),
+            raised_lg: chat.raised(),
+            pressed_sm: chat.carved_sm(),
+            pressed: chat.carved_sm(),
+            pressed_deep: chat.carved(),
+            modal: chat.floating(),
+            primary: chat.action_raised(),
+            primary_pressed: chat.action_pressed(),
+            primary_sm: chat.action_raised(),
+            nav_active: chat.raised_sm(),
+            image_well: chat.carved(),
+        };
+        theme
+    }
+
 
     /// Every theme that ships, in the order the storybook lists them.
     pub fn all() -> &'static [&'static Theme] {
@@ -210,6 +270,7 @@ pub fn light() -> &'static Theme {
             elevation: elevations(&shadow, &accent, &gradient),
             gradient,
             chat: Chat::lit_from(rgb(0xECEFF3), false),
+            glass: None,
         }
     })
 }
@@ -298,6 +359,7 @@ pub fn dark() -> &'static Theme {
             elevation: elevations(&shadow, &accent, &gradient),
             gradient,
             chat: Chat::lit_from(rgb(0x23272E), true),
+            glass: None,
         }
     })
 }

@@ -376,6 +376,10 @@ pub struct Chat {
     pub chip_top: Color32,
     /// `linear-gradient(135deg, #2fb98f, #3ad6ad)`: a track whose work is all done.
     pub done: Gradient,
+    /// Whether these are the glass values of [`Chat::glass`] (`task-2281`). The shadow methods below
+    /// answer the glass design's recipes when it is set, which is the one place a recipe rather than a
+    /// value follows the theme: glass is a material, and a material is a recipe.
+    pub glass: bool,
 }
 
 impl Chat {
@@ -419,6 +423,7 @@ impl Chat {
                 chip_edge: Color32::WHITE.at(0.045),
                 chip_top: Color32::WHITE.at(0.05),
                 done: Gradient::at(135.0, rgb(0x2FB98F), rgb(0x3AD6AD)),
+                glass: false,
             },
             false => Self {
                 ground,
@@ -443,12 +448,90 @@ impl Chat {
                 chip_edge: Color32::BLACK.at(0.04),
                 chip_top: Color32::WHITE.at(0.6),
                 done: Gradient::at(135.0, rgb(0x0C8A69), rgb(0x0F9A76)),
+                glass: false,
             },
         }
     }
 
+    /// The glass design's values (`task-2281`): the Claude Design canvas "Unluminous", page
+    /// "Agent-Chat 2", `ChatPaneGlass.dc.html`.
+    ///
+    /// Every surface is translucent, because under a glass theme a raised translucent surface is drawn
+    /// over the picture it bends (`render::glass`), and the design's tint, lit edges and drop shadow are
+    /// what is painted over that. `--card` is two layers in the design, a white sheen
+    /// `linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.02) 60%)` over a smoke
+    /// `rgba(10,12,20,.34)`; it is one gradient here, each end the sheen composited over the smoke.
+    pub fn glass(ground: Color32) -> Self {
+        // `rgba(255,255,255,a)` over `rgba(10,12,20,.34)`, premultiplied.
+        let sheen_over_smoke = |a: f32| {
+            let smoke = 0.34 * (1.0 - a);
+            let channel = |c: f32| (255.0 * a + c * smoke).round() as u8;
+            Color32::from_rgba_premultiplied(
+                channel(10.0),
+                channel(12.0),
+                channel(20.0),
+                ((a + smoke) * 255.0).round() as u8,
+            )
+        };
+        let card = Gradient::at(135.0, sheen_over_smoke(0.13), sheen_over_smoke(0.02));
+        Self {
+            ground,
+            card,
+            // `--well: rgba(6, 8, 14, 0.42)`.
+            well: rgba(0x06080E, 0.42),
+            light: Color32::WHITE.at(0.10),
+            dark: Color32::BLACK.at(0.38),
+            // `--grad: linear-gradient(135deg, rgba(61,120,255,.88), rgba(92,182,255,.72))`.
+            action: Gradient::at(135.0, rgba(0x3D78FF, 0.88), rgba(0x5CB6FF, 0.72)),
+            action_hover: Gradient::at(135.0, rgba(0x4D86FF, 0.92), rgba(0x70C2FF, 0.78)),
+            // `--grad-out: 0 6px 20px rgba(40, 100, 255, 0.35)`.
+            action_glow: rgba(0x2864FF, 0.35),
+            action_sheen: rgba(0x8CC8FF, 0.25),
+            sky: rgb(0x5CB6FF),
+            track: Color32::WHITE.at(0.14),
+            quiet: Color32::WHITE.at(0.22),
+            slices: [Color32::WHITE.at(0.34), Color32::WHITE.at(0.18)],
+            slower: rgb(0xFF8F73),
+            faster: rgb(0x3AD6AD),
+            waiting: rgb(0xFFC062),
+            chip: card,
+            chip_light: Color32::WHITE.at(0.42),
+            chip_dark: Color32::BLACK.at(0.34),
+            chip_edge: Color32::WHITE.at(0.16),
+            chip_top: Color32::WHITE.at(0.42),
+            done: Gradient::at(135.0, rgba(0x2FB98F, 0.9), rgba(0x3AD6AD, 0.8)),
+            glass: true,
+        }
+    }
+
+    /// `--out`: a card under glass. A long soft fall, a lit top edge, a faint lit bottom edge, a hairline
+    /// rim and a faint glow inside.
+    fn glass_out() -> Elevation {
+        Elevation::of([
+            Shadow::outer(0.0, 16.0, 36.0, Color32::BLACK.at(0.38)),
+            Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.38)),
+            Shadow::inset(0.0, -1.0, 0.0, Color32::WHITE.at(0.10)),
+            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.14)).spread(1.0),
+            Shadow::inset(0.0, 0.0, 22.0, Color32::WHITE.at(0.05)),
+        ])
+    }
+
+    /// `--out-sm`: a bubble, a round button or a chip under glass.
+    fn glass_out_sm() -> Elevation {
+        Elevation::of([
+            Shadow::outer(0.0, 6.0, 16.0, Color32::BLACK.at(0.34)),
+            Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.42)),
+            Shadow::inset(0.0, -1.0, 0.0, Color32::WHITE.at(0.10)),
+            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.16)).spread(1.0),
+        ])
+    }
+
+
     /// `--out: -7px -7px 16px light, 8px 8px 18px dark`: a card.
     pub fn raised(&self) -> Elevation {
+        if self.glass {
+            return Self::glass_out();
+        }
         Elevation::of([
             Shadow::outer(-7.0, -7.0, 16.0, self.light),
             Shadow::outer(8.0, 8.0, 18.0, self.dark),
@@ -457,6 +540,9 @@ impl Chat {
 
     /// `--out-sm: -4px -4px 9px light, 4px 4px 10px dark`: a bubble, a round button, a knob.
     pub fn raised_sm(&self) -> Elevation {
+        if self.glass {
+            return Self::glass_out_sm();
+        }
         Elevation::of([
             Shadow::outer(-4.0, -4.0, 9.0, self.light),
             Shadow::outer(4.0, 4.0, 10.0, self.dark),
@@ -466,6 +552,9 @@ impl Chat {
     /// The Agent-Tasks board's `--out-sm`: `-2px -2px 5px`, `3px 3px 6px` and a hairline inside the
     /// edge. Tighter than a bubble's, for a chip, a count, a chosen view and a card's round buttons.
     pub fn raised_chip(&self) -> Elevation {
+        if self.glass {
+            return Self::glass_out_sm();
+        }
         Elevation::of([
             Shadow::outer(-2.0, -2.0, 5.0, self.chip_light),
             Shadow::outer(3.0, 3.0, 6.0, self.chip_dark),
@@ -476,6 +565,14 @@ impl Chat {
 
     /// `--in: inset 5px 5px 10px dark, inset -5px -5px 10px light`: the prompt box, a dial's channel.
     pub fn carved(&self) -> Elevation {
+        if self.glass {
+            return Elevation::of([
+                // `--in`: a dark fall inside the top, a hairline rim, and a lit line under the bottom.
+                Shadow::inset(0.0, 1.0, 3.0, Color32::BLACK.at(0.35)),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.10)).spread(1.0),
+                Shadow::outer(0.0, 1.0, 0.0, Color32::WHITE.at(0.06)),
+            ]);
+        }
         Elevation::of([
             Shadow::inset(5.0, 5.0, 10.0, self.dark),
             Shadow::inset(-5.0, -5.0, 10.0, self.light),
@@ -484,6 +581,13 @@ impl Chat {
 
     /// `--in-sm: inset 2px 2px 5px dark, inset -2px -2px 5px light`: a status well, a code block.
     pub fn carved_sm(&self) -> Elevation {
+        if self.glass {
+            return Elevation::of([
+                // `--in-sm`.
+                Shadow::inset(0.0, 1.0, 2.0, Color32::BLACK.at(0.30)),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.08)).spread(1.0),
+            ]);
+        }
         Elevation::of([
             Shadow::inset(2.0, 2.0, 5.0, self.dark),
             Shadow::inset(-2.0, -2.0, 5.0, self.light),
@@ -492,6 +596,14 @@ impl Chat {
 
     /// `--grad-out`: the action, lifted, with its blue glow and a lit top edge.
     pub fn action_raised(&self) -> Elevation {
+        if self.glass {
+            return Elevation::of([
+                // `--grad-out`.
+                Shadow::outer(0.0, 6.0, 20.0, self.action_glow),
+                Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.45)),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.22)).spread(1.0),
+            ]);
+        }
         Elevation::of([
             Shadow::outer(-4.0, -4.0, 9.0, self.light),
             Shadow::outer(4.0, 5.0, 12.0, self.action_glow),
@@ -509,6 +621,15 @@ impl Chat {
 
     /// The Chat settings dialog: a lit edge up and left, and a long soft fall below.
     pub fn floating(&self) -> Elevation {
+        if self.glass {
+            return Elevation::of([
+                // The Chat settings dialog under glass: `0 24px 60px rgba(0,0,0,.5)`, a lit top edge
+                // and a hairline rim.
+                Shadow::outer(0.0, 24.0, 60.0, Color32::BLACK.at(0.50)),
+                Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.25)),
+                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.14)).spread(1.0),
+            ]);
+        }
         Elevation::of([
             Shadow::outer(-6.0, -6.0, 16.0, self.light.at(0.6)),
             Shadow::outer(0.0, 24.0, 48.0, Color32::BLACK.at(0.55)),
@@ -518,5 +639,58 @@ impl Chat {
     /// `--ring`'s outer half: `rgba(92, 182, 255, 0.6)`.
     pub fn focus(&self) -> Color32 {
         self.sky.at(0.6)
+    }
+}
+
+/// A material that bends the picture behind a surface rather than hiding it (`task-2281`).
+///
+/// The Claude Design canvas "Unluminous", page "Agent-Chat 2", builds it in a browser with an SVG
+/// backdrop filter per element: a displacement map made from the element's rounded rectangle, applied
+/// three times at slightly different strengths for red, green and blue. `render::glass` draws the same
+/// arithmetic as a mesh. These are the numbers that arithmetic is made of, and where each one came from
+/// is written beside it.
+///
+/// How deep the rim is and how hard it bends both follow the shape's shorter side, because the design
+/// gives every element a map of its own size: a bevel of 40 on a 96 point circle, 28 on a card, 14 on a
+/// pill; a strength of 16 on a 38 point circle, 36 on a card. A share of the shorter side capped at the
+/// card's value reproduces every one of them within a few points.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Glass {
+    /// How much the interior magnifies: the design's `lens = 0.42`.
+    pub lens: f32,
+    /// The strength each of red, green and blue is bent by, as a share of the whole: `1.0, 0.92, 0.84`.
+    /// The difference is the faint colour split at an edge that real glass has.
+    pub chroma: [f32; 3],
+    /// The rim's depth as a share of the shorter side, and the most it may be.
+    pub bevel_share: f32,
+    pub bevel_most: f32,
+    /// The strength as a share of the shorter side, the most it may be, and the factor the design puts
+    /// on every base strength (`S = base × 1.7`).
+    pub strength_share: f32,
+    pub strength_most: f32,
+    pub strength_scale: f32,
+}
+
+impl Glass {
+    /// The design's own glass.
+    pub const DESIGN: Glass = Glass {
+        lens: 0.42,
+        chroma: [1.0, 0.92, 0.84],
+        bevel_share: 0.42,
+        bevel_most: 30.0,
+        strength_share: 0.42,
+        strength_most: 36.0,
+        strength_scale: 1.7,
+    };
+
+    /// How deep the rim of a shape this size is, in points.
+    pub fn bevel_for(&self, size: egui::Vec2) -> f32 {
+        (size.x.min(size.y) * self.bevel_share).min(self.bevel_most).max(0.0)
+    }
+
+    /// How far a shape this size bends the picture, in points.
+    pub fn strength_for(&self, size: egui::Vec2) -> f32 {
+        (size.x.min(size.y) * self.strength_share).min(self.strength_most).max(0.0)
+            * self.strength_scale
     }
 }

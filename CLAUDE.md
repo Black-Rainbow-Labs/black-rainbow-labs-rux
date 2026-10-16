@@ -244,3 +244,20 @@ component looks like or how it is called updates, in the same commit:
 `docs/writing-style.md` is how the pages are written. `crates/rux/examples/first_window.rs` is the program
 `docs/getting-started.md` walks through, and it is built by `cargo build -p rux --examples`, so a change to
 the API that breaks that page breaks the build.
+
+## Glass is a material, and the one place a theme changes a recipe (task-2281)
+
+`Theme::glazed` makes a theme whose raised translucent surfaces bend the picture behind the window.
+`docs/glass.md` is the page and `render/glass.rs` is the arithmetic. Three rules keep it from becoming a
+second style:
+
+- **No component asks whether the theme is glass.** `Chrome::surface` records `Decor::Glass` before the
+  fill when `theme.glass` is set, the surface has an outer shadow and its fill is translucent. The rule that
+  `components/` never branches on the theme still holds.
+- **The recipes that change are `Chat`'s shadow methods and `Theme::elevation`**, both in `theme/`, and only
+  when `Chat::glass` is set. `the_dark_theme_changes_no_recipe_at_all` is about the two shipped themes and
+  still passes; a glazed theme is a third thing on purpose.
+- **Glass bends a picture the application hands over** with `render::set_backdrop`, never the frame. A layer
+  with glass in it is cut at each piece of glass into runs, each rasterised as its own texture, so the order
+  of decoration is kept. A layer with no glass, or with no picture set, is one texture exactly as before.
+  `tests/glass.rs` holds those rules and `tests/draw.rs` draws every component in a glazed theme.

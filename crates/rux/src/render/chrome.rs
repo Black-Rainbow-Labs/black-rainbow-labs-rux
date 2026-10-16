@@ -7,7 +7,7 @@
 use egui::{Color32, Pos2, Rect, Vec2};
 
 use super::decor::{Corners, Decor, Fill};
-use crate::theme::Elevation;
+use crate::theme::{Elevation, Glass};
 
 /// The recorder every component draws its decoration into.
 ///
@@ -19,6 +19,9 @@ use crate::theme::Elevation;
 pub struct Chrome {
     recording: bool,
     items: std::sync::Mutex<Vec<Decor>>,
+    /// The material of the theme the layer is drawn in. `Some` makes a raised translucent surface
+    /// glass; see [`Chrome::surface`].
+    glass: Option<Glass>,
 }
 
 impl Chrome {
@@ -27,12 +30,24 @@ impl Chrome {
     /// `const`, so it can be a `static` — which is what lets a test build a component context with no
     /// canvas behind it.
     pub const fn off() -> Self {
-        Self { recording: false, items: std::sync::Mutex::new(Vec::new()) }
+        Self { recording: false, items: std::sync::Mutex::new(Vec::new()), glass: None }
     }
 
     /// A chrome that records, for a layer that has a canvas behind it.
     pub fn recording() -> Self {
-        Self { recording: true, items: std::sync::Mutex::new(Vec::new()) }
+        Self { recording: true, items: std::sync::Mutex::new(Vec::new()), glass: None }
+    }
+
+    /// The same chrome drawing in a material: `Some` is glass (`task-2281`). [`super::layer`] sets the
+    /// theme's own, so a component never asks.
+    pub fn with_glass(mut self, glass: Option<Glass>) -> Self {
+        self.glass = glass;
+        self
+    }
+
+    /// The material this chrome draws raised translucent surfaces in.
+    pub fn glass(&self) -> Option<Glass> {
+        self.glass
     }
 
     /// Whether anything drawn into this will be seen.
@@ -101,7 +116,8 @@ impl Chrome {
         let representative = corners.representative();
 
         let outer: Vec<_> = elevation.shadows().filter(|shadow| !shadow.inset).collect();
-        if !outer.is_empty() {
+        let has_outer = !outer.is_empty();
+        if has_outer {
             let cut = fill.is_opaque();
             if cut {
                 self.push(Decor::Clip {
@@ -125,6 +141,21 @@ impl Chrome {
             if cut {
                 self.push(Decor::Unclip);
             }
+        }
+
+        // **Glass**, under a glass theme (`task-2281`): a raised surface (one with a shadow outside it)
+        // whose fill can be seen through bends the picture behind it, and its fill, its edges and its
+        // inner glow are painted over the bent picture. The rule is here rather than in a component, so
+        // no component branches on the theme. An opaque fill hides the picture anyway, and a carved
+        // well has no outer shadow, so neither is glass.
+        if let Some(glass) = self.glass.filter(|_| has_outer && !fill.is_opaque()) {
+            let size = rect.size();
+            self.push(Decor::Glass {
+                rect,
+                corners,
+                bevel: glass.bevel_for(size),
+                strength: glass.strength_for(size),
+            });
         }
 
         self.push(Decor::Rect { rect, corners, fill });

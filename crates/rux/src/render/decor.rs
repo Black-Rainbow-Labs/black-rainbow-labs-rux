@@ -149,6 +149,13 @@ pub enum Decor {
     /// correct.
     Clip { rect: Rect, corners: Corners, outside: bool, bound: Rect },
     Unclip,
+    /// Glass: the picture behind the layer, bent through this rounded rectangle (`task-2281`).
+    ///
+    /// Not rasterised. [`super::layer`] cuts the list at each one and draws the bent picture there as
+    /// an `egui` mesh, so whatever was recorded after it is painted over it and whatever was recorded
+    /// before it is under it. `bevel` is how deep the rim is and `strength` how far it bends, both in
+    /// points; see [`crate::theme::Glass`].
+    Glass { rect: Rect, corners: Corners, bevel: f32, strength: f32 },
 }
 
 impl Decor {
@@ -172,6 +179,7 @@ impl Decor {
             Self::Line { from, to, width, .. } => Rect::from_two_pos(from, to).expand(width),
             Self::Clip { bound, .. } => bound,
             Self::Unclip => Rect::NOTHING,
+            Self::Glass { rect, .. } => rect,
         }
     }
 }
@@ -272,6 +280,12 @@ impl Hash for Decor {
                 rect(bound, into);
             }
             Decor::Unclip => {}
+            Decor::Glass { rect: area, corners: round, bevel, strength } => {
+                rect(area, into);
+                corners(round, into);
+                f(bevel, into);
+                f(strength, into);
+            }
         }
     }
 }

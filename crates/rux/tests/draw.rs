@@ -32,7 +32,7 @@ use rux::{RuxState, Theme};
 fn drawn(screen: Screen, theme: &str, body: impl FnOnce(&mut rux::Rux<'_>)) {
     let ctx = egui::Context::default();
     rux::text::install(&ctx);
-    let state = RuxState::new(Theme::named(theme).expect("a theme"));
+    let state = RuxState::new(theme_named(&ctx, theme));
     state.set_screen(screen);
 
     let mut input = egui::RawInput::default();
@@ -55,6 +55,33 @@ fn drawn(screen: Screen, theme: &str, body: impl FnOnce(&mut rux::Rux<'_>)) {
         output.textures_delta.clear();
     }
     state.end_frame();
+}
+
+/// A shipped theme by name, or `dark-glass`: the dark theme glazed (`task-2281`), with a picture behind
+/// it so every piece of glass is really bent and cut into its strips.
+fn theme_named(ctx: &egui::Context, name: &str) -> &'static Theme {
+    if name != "dark-glass" {
+        return Theme::named(name).expect("a theme");
+    }
+    let bands = (0..4)
+        .map(|band| {
+            let top = band as f32 / 4.0;
+            rux::render::Band {
+                texture: egui::TextureId::User(band),
+                drawn: (top, top + 0.25),
+                held: ((top - 0.01).max(0.0), (top + 0.26).min(1.0)),
+            }
+        })
+        .collect();
+    let backdrop = rux::render::Backdrop {
+        bands,
+        rect: Rect::from_min_size(egui::pos2(0.0, 0.0), Vec2::new(1440.0, 900.0)),
+        uv: Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+        opacity: 1.0,
+    };
+    rux::render::set_backdrop(ctx, rux::render::Plane::Page, Some(backdrop));
+    let dark = Theme::named("dark-neumorphic").expect("the dark theme");
+    Box::leak(Box::new(dark.glazed("dark-glass", dark.surface.s1)))
 }
 
 fn desktop() -> Screen {
@@ -195,12 +222,14 @@ fn every_component(rux: &mut rux::Rux<'_>) {
 fn every_component_draws_on_a_desktop() {
     drawn(desktop(), "light-neumorphic", every_component);
     drawn(desktop(), "dark-neumorphic", every_component);
+    drawn(desktop(), "dark-glass", every_component);
 }
 
 #[test]
 fn every_component_draws_on_a_phone() {
     drawn(phone(), "dark-neumorphic", every_component);
     drawn(phone(), "light-neumorphic", every_component);
+    drawn(phone(), "dark-glass", every_component);
 }
 
 #[test]
@@ -451,7 +480,7 @@ fn every_chat_part(rux: &mut rux::Rux<'_>) {
 
 #[test]
 fn every_chat_part_draws_in_both_themes_on_both_screens() {
-    for theme in ["dark-neumorphic", "light-neumorphic"] {
+    for theme in ["dark-neumorphic", "light-neumorphic", "dark-glass"] {
         for screen in [desktop(), phone()] {
             drawn(screen, theme, every_chat_part);
         }
@@ -519,7 +548,7 @@ fn every_board_part(rux: &mut rux::Rux<'_>) {
 
 #[test]
 fn every_board_part_draws_in_both_themes_on_both_screens() {
-    for theme in ["dark-neumorphic", "light-neumorphic"] {
+    for theme in ["dark-neumorphic", "light-neumorphic", "dark-glass"] {
         for screen in [desktop(), phone()] {
             drawn(screen, theme, every_board_part);
         }

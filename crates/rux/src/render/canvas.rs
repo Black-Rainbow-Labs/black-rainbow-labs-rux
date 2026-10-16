@@ -322,6 +322,8 @@ impl Canvas {
                 self.context.set_fill_rule(FillRule::NonZero);
                 *clips += 1;
             }
+            // Glass is drawn by `render::layer` as a mesh between two rasterised runs, never here.
+            Decor::Glass { .. } => {}
             Decor::Unclip => {
                 if *clips > 0 {
                     self.context.pop_clip_path();
@@ -397,6 +399,9 @@ fn rounded(rect: Rect, corners: Corners) -> BezPath {
 #[derive(Debug, Default)]
 pub struct Canvases {
     by_id: HashMap<egui::Id, Canvas>,
+    /// Each piece of glass's shapes and what they were built from, by the id the layer gave it, and the
+    /// frame each was last asked for (`task-2281`).
+    glass: HashMap<egui::Id, (super::glass::Built, Vec<egui::Shape>, u64)>,
     /// Which frame this is, counted by [`Canvases::tidy`].
     ///
     /// A counter rather than a list of what was drawn this frame: the list version compared lengths to
@@ -436,10 +441,38 @@ impl Canvases {
         canvas.texture_for(ctx, id, rect, pixels_per_point, items)
     }
 
+    /// The shapes that draw one piece of glass, built again only when what they are built from moved.
+    ///
+    /// A still frame compares and copies a handful of `Arc`s, which is what keeps glass free when
+    /// nothing is moving.
+    pub(crate) fn glass_for(
+        &mut self,
+        id: egui::Id,
+        built: super::glass::Built,
+    ) -> Vec<egui::Shape> {
+        let frame = self.frame;
+        if let Some((kept, shapes, used)) = self.glass.get_mut(&id) {
+            if *kept == built {
+                *used = frame;
+                return shapes.clone();
+            }
+        }
+        let shapes = super::glass::shapes(
+            &built.glass,
+            &built.pane,
+            &built.backdrop,
+            built.to_global,
+            built.pixels_per_point,
+        );
+        self.glass.insert(id, (built, shapes.clone(), frame));
+        shapes
+    }
+
     /// Forget the canvases of layers that were not drawn this frame. Called once, at the end of a frame.
     pub fn tidy(&mut self) {
         let frame = self.frame;
         self.by_id.retain(|_, canvas| canvas.last_used == frame);
+        self.glass.retain(|_, (_, _, used)| *used == frame);
         self.frame = self.frame.wrapping_add(1);
     }
 
