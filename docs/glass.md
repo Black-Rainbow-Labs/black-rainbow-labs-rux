@@ -88,17 +88,20 @@ both sides all round and 44 along the top.
   and no inner glow: an inner white glow lit every edge of a surface, which on a bright picture read as a
   ring. A carved well under glass is one dark inner shadow with no light half. `glass_out`, `glass_out_sm`,
   `carved`, `carved_sm`, `action_raised` and `floating` in `theme/tokens.rs`.
-- **The glass fades across its edge, centred on it.** The tint is antialiased half a pixel either side of
-  the outline, and the glass used to fade only outside it, so on the outline the tint was over a full share
-  of picture and was brighter. The feather ring now sits half a feather outside the outline and the first
-  full ring half a feather inside it.
+- **The glass fades just inside its edge.** The tint is antialiased across the outline, and the glass
+  used to stay whole up to the outline or past it, so the outline pixel had more of the picture than of the
+  tint's darkening and was brighter. The faded ring now sits on the outline and the first whole ring one
+  pixel inside it.
+- **A corner is cut into as many segments as its size in pixels needs** (`CURVE_TOLERANCE`, a twentieth of
+  a pixel). At one segment every four points and at most eight a corner, a round chip was a polygon whose
+  flats strayed a third of a pixel from the tint's true curve at 1.5 pixels a point, and read as jagged.
 
-After all of these, on a bright picture at 1.5 pixels a point, the chips in Unluminous's title bar measure
-+0.9 all round and +2.8 along the top.
+After all of these, on a bright picture, the chips in Unluminous's title bar measure +0.3 all round and +0.5
+along the top at 1.5 pixels a point, and +2.3 and +3.1 at 2.
 
 ## What it costs
 
-A piece of glass is about four hundred vertices, drawn three times, one for each colour channel. The
+A piece of glass is four to six hundred vertices at 1.5 pixels a point, drawn three times, one for each colour channel. The
 shapes are kept per layer and built again only when the surface, the picture or the layer's transform
 moves, so a still frame builds nothing. Measured in Unluminous while scrolling its chat pane, egui's own
 time per frame went up by about 0.4 ms against the same pane in the dark theme.

@@ -200,9 +200,22 @@ fn radii(rect: Rect, corners: Corners) -> [f32; 4] {
     [corners.nw, corners.ne, corners.se, corners.sw].map(|radius| radius.clamp(0.0, most))
 }
 
-/// How many segments a corner of this radius is cut into.
+/// How far a corner's straight segments may stray from the true curve, in physical pixels.
+///
+/// The surface's tint under the glass is a true curve, so where the glass's outline is a polygon the two
+/// disagree along each flat and the edge reads as faceted. At one segment every four points, at most eight
+/// a corner, a chip's outline strayed a third of a pixel at 1.5 pixels a point, and Jason saw the facets
+/// (`task-2281`, fifth pass). A twentieth of a pixel is below what the one pixel feather can show.
+const CURVE_TOLERANCE: f32 = 0.05;
+
+/// How many segments a corner whose radius is `radius` physical pixels is cut into, so no segment strays more than
+/// [`CURVE_TOLERANCE`] from the curve.
 fn segments(radius: f32) -> usize {
-    ((radius / 4.0).ceil() as usize).clamp(2, 8)
+    if !radius.is_finite() || radius <= CURVE_TOLERANCE {
+        return 2;
+    }
+    let step = 2.0 * (1.0 - CURVE_TOLERANCE / radius).acos();
+    ((std::f32::consts::FRAC_PI_2 / step).ceil() as usize).clamp(2, 64)
 }
 
 /// The vertices of one ring: the rounded rectangle moved `inset` points inwards (outwards when
@@ -240,25 +253,27 @@ fn ring(pane: &Pane, glass: &Glass, inset: f32, cuts: [usize; 4], feather: bool)
 
 /// The glass as rings and a centre, and the triangles that join them.
 ///
-/// `feather` is how wide the faded band round the edge is, centred on the edge, in the layer's points: one
+/// `feather` is how wide the faded band just inside the edge is, in the layer's points: one
 /// physical pixel, which is the feather `egui` gives its own rounded rectangles.
 pub fn geometry(glass: &Glass, pane: &Pane, feather: f32) -> (Vec<Sample>, Vec<u32>) {
     let half = pane.rect.width().min(pane.rect.height()) / 2.0;
     let radii = radii(pane.rect, pane.corners);
-    let cuts = radii.map(segments);
+    // `feather` is one physical pixel in the layer's points, so this is each corner's radius in pixels.
+    let cuts = radii.map(|radius| segments(radius / feather.max(0.001)));
     let deepest = pane.bevel.min(half - 0.25).max(0.0);
     let mut samples = Vec::new();
     let mut rings = Vec::new();
-    // The faded ring half a pixel outside the edge, the whole ring half a pixel inside it, then deeper rings
-    // across the rim. **The fade is centred on the edge**, the way the surface's own tint is antialiased
-    // over it (`task-2281`, fourth pass): with the glass whole up to the edge and the tint only half there
-    // at it, the edge pixel had the whole picture and half the tint's darkening, a light line on a bright
-    // picture.
+    // The faded ring on the edge, the whole ring one pixel inside it, then deeper rings across the rim.
+    // **The glass fades inside the edge**, under the tint's own antialiased edge (`task-2281`): with the
+    // glass whole up to the edge or past it, the edge pixel had more of the picture than of the tint's
+    // darkening, a light line on a bright picture. Measured with `glass-rims.py` on a bright picture, the
+    // fade centred on the edge left +4.6 at two pixels a point once the outline was a true curve; inside
+    // it, +2.3, and +0.3 at 1.5.
     rings.push(samples.len());
-    samples.extend(ring(pane, glass, -feather * 0.5, cuts, true));
+    samples.extend(ring(pane, glass, 0.0, cuts, true));
     for step in 0..=RINGS {
         rings.push(samples.len());
-        let inset = (deepest * step as f32 / RINGS as f32).max(feather * 0.5);
+        let inset = (deepest * step as f32 / RINGS as f32).max(feather);
         samples.extend(ring(pane, glass, inset, cuts, false));
     }
     let around = samples.len() / rings.len();
@@ -682,5 +697,24 @@ mod tests {
             .map(|v| v.color.to_array().iter().position(|&c| c > 0).unwrap())
             .collect();
         assert!(channels.contains(&0) && channels.contains(&1) && channels.contains(&2));
+    }
+
+    #[test]
+    fn a_round_chips_outline_stays_within_a_twentieth_of_a_pixel_of_the_circle() {
+        // task-2281, fifth pass: a 34 point chip at 1.5 pixels a point had flats a third of a pixel deep.
+        for scale in [1.0_f32, 1.5, 2.0, 3.0] {
+            let rect = Rect::from_center_size(Pos2::new(100.0, 100.0), Vec2::splat(34.0));
+            let pane = Pane { rect, corners: Corners::from(17.0), bevel: 8.0, strength: 20.0 };
+            let (samples, _) = geometry(&Glass::DESIGN, &pane, 1.0 / scale);
+            // The first whole ring is the one on the edge; it is the second ring in the list.
+            let around = samples.len() / (RINGS + 2);
+            let edge = &samples[around..around * 2];
+            let radius = (edge[0].at - rect.center()).length();
+            for pair in edge.windows(2) {
+                let middle = pair[0].at + (pair[1].at - pair[0].at) * 0.5;
+                let sag = (radius - (middle - rect.center()).length()) * scale;
+                assert!(sag <= CURVE_TOLERANCE + 0.001, "a flat {sag} pixels deep at {scale} pixels a point");
+            }
+        }
     }
 }
