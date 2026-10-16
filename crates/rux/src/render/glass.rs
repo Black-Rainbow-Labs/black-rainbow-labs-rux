@@ -21,9 +21,15 @@
 //!
 //! **The colour split is three passes that add.** `egui` blends premultiplied, `src + dst × (1 − src.a)`,
 //! so a vertex colour whose alpha is zero adds. The glass first covers what is behind it with a dark
-//! rounded rectangle at the picture's opacity, and then adds red, green and blue, each sampled at its
+//! copy of its own mesh at the picture's opacity, and then adds red, green and blue, each sampled at its
 //! own strength. The order of the three does not matter, which is what lets them be cut across the
 //! picture's strips independently.
+//!
+//! **The cover is the passes' own mesh, so the two fade out together at the edge.** It used to be an
+//! `egui` rounded rectangle, whose one pixel feather is centred on the edge, while the passes stay whole
+//! up to the edge and fade only outside it. Along the outline the picture was then added over a cover
+//! that was already partly gone, and every piece of glass had a thin ring brighter than both sides of
+//! it: the white edge reported on task-2281.
 //!
 //! **What is bent is a picture the application hands over, not the frame.** `egui` draws every layer
 //! straight into one render pass and cannot read back what is already there, so glass cannot sample
@@ -296,7 +302,7 @@ pub fn shapes(
     let (samples, indices) = geometry(glass, pane, 1.0 / scale);
     let opacity = (backdrop.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
     let mut shapes = Vec::with_capacity(1 + backdrop.bands.len());
-    shapes.push(cover(pane, opacity));
+    shapes.push(cover(&samples, &indices, opacity));
 
     // All three passes in one mesh, in picture coordinates, before they are cut at the strips.
     let mut whole = Mesh::default();
@@ -332,16 +338,26 @@ pub fn shapes(
     shapes
 }
 
-/// The dark rounded rectangle that covers what is behind the glass, by the picture's own opacity, so
-/// the three passes that follow can add.
-fn cover(pane: &Pane, opacity: u8) -> Shape {
-    let [nw, ne, se, sw] =
-        radii(pane.rect, pane.corners).map(|r| r.round().clamp(0.0, 255.0) as u8);
-    Shape::rect_filled(
-        pane.rect,
-        egui::CornerRadius { nw, ne, se, sw },
-        Color32::from_rgba_premultiplied(0, 0, 0, opacity),
-    )
+/// What covers what is behind the glass, by the picture's own opacity, so the three passes that follow
+/// can add: the passes' own mesh in black, fading on the same feathered ring, so the cover and the
+/// passes leave exactly the same share of the background at every point of the edge.
+///
+/// @param samples - the points of the glass, from [`geometry`]
+/// @param indices - its triangles
+/// @param opacity - how much of what is behind it the cover hides, 0 to 255
+fn cover(samples: &[Sample], indices: &[u32], opacity: u8) -> Shape {
+    let dark = Color32::from_rgba_premultiplied(0, 0, 0, opacity);
+    let mut mesh = Mesh::default();
+    mesh.vertices = samples
+        .iter()
+        .map(|sample| Vertex {
+            pos: sample.at,
+            uv: egui::epaint::WHITE_UV,
+            color: if sample.feather { Color32::TRANSPARENT } else { dark },
+        })
+        .collect();
+    mesh.indices = indices.to_vec();
+    Shape::mesh(mesh)
 }
 
 /// The triangles of `mesh` whose texture rows lie between `top` and `bottom`, cut where they cross.
@@ -536,6 +552,7 @@ mod tests {
         };
         let pieces: f32 = drawn
             .iter()
+            .skip(1)
             .filter_map(|shape| match shape {
                 Shape::Mesh(mesh) => Some(area(mesh)),
                 _ => None,
@@ -547,7 +564,33 @@ mod tests {
             (pieces / 3.0 - one_pass).abs() < one_pass * 0.02,
             "{pieces} against three of {one_pass}"
         );
-        assert!(matches!(drawn[0], Shape::Rect(_)), "the cover goes first");
+        assert!(
+            matches!(&drawn[0], Shape::Mesh(mesh) if mesh.texture_id == TextureId::default()),
+            "the cover goes first, untextured"
+        );
+    }
+
+    #[test]
+    fn the_cover_fades_out_on_exactly_the_vertices_the_passes_do() {
+        // The white edge of task-2281: a cover that fades on a different line from the passes leaves a
+        // ring where the picture is added over a background the cover has not hidden.
+        let pane = card();
+        let backdrop = Backdrop::single(
+            TextureId::User(1),
+            Rect::from_min_size(Pos2::ZERO, Vec2::new(500.0, 200.0)),
+            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+            0.8,
+        );
+        let drawn = shapes(&Glass::DESIGN, &pane, &backdrop, Default::default(), 1.0);
+        let Shape::Mesh(cover) = &drawn[0] else { panic!("the cover is a mesh") };
+        let (samples, indices) = geometry(&Glass::DESIGN, &pane, 1.0);
+        assert_eq!(cover.indices, indices);
+        assert_eq!(cover.vertices.len(), samples.len());
+        for (vertex, sample) in cover.vertices.iter().zip(&samples) {
+            assert_eq!(vertex.pos, sample.at);
+            // The passes are transparent on the feather and whole everywhere else; so is the cover.
+            assert_eq!(vertex.color.a(), if sample.feather { 0 } else { 204 });
+        }
     }
 
     #[test]

@@ -504,29 +504,28 @@ impl Chat {
         }
     }
 
-    /// `--out`: a card under glass. A long soft fall, a lit top edge, a faint lit bottom edge, a hairline
-    /// rim and a faint glow inside.
+    /// `--out`: a card under glass. A long soft fall, light coming in softly from the top, and a faint
+    /// glow inside.
     ///
-    /// The lit edges are softer than the design's (`task-2281`, second pass): the design's one point
-    /// line at 38% white read as a hard white stroke along the top of every card over a dark picture, so
-    /// the top is a glow two points down and four across at 9%, and the rim is half as strong.
+    /// There is no line along any edge (`task-2281`, third pass). The design's lit top edge, a one point
+    /// line, and its hairline rim each read as a white stroke round every card and button over the
+    /// picture, even at a few percent, because the glass's own refraction already draws the outline. The
+    /// light from the top is a glow six points down and eighteen across, so it lights the upper part of
+    /// the surface without drawing a line. `rims.py` in `_agent_output/task-2281-glass/` of Unluminous is
+    /// the measurement that finds a line.
     fn glass_out() -> Elevation {
         Elevation::of([
             Shadow::outer(0.0, 16.0, 36.0, Color32::BLACK.at(0.38)),
-            Shadow::inset(0.0, 2.0, 4.0, Color32::WHITE.at(0.09)),
-            Shadow::inset(0.0, -1.0, 2.0, Color32::WHITE.at(0.03)),
-            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.07)).spread(1.0),
-            Shadow::inset(0.0, 0.0, 22.0, Color32::WHITE.at(0.04)),
+            Shadow::inset(0.0, 6.0, 18.0, Color32::WHITE.at(0.05)),
+            Shadow::inset(0.0, 0.0, 22.0, Color32::WHITE.at(0.03)),
         ])
     }
 
-    /// `--out-sm`: a bubble, a round button or a chip under glass.
+    /// `--out-sm`: a bubble, a round button or a chip under glass. See [`Self::glass_out`].
     fn glass_out_sm() -> Elevation {
         Elevation::of([
             Shadow::outer(0.0, 6.0, 16.0, Color32::BLACK.at(0.34)),
-            Shadow::inset(0.0, 2.0, 3.0, Color32::WHITE.at(0.10)),
-            Shadow::inset(0.0, -1.0, 2.0, Color32::WHITE.at(0.03)),
-            Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.08)).spread(1.0),
+            Shadow::inset(0.0, 4.0, 10.0, Color32::WHITE.at(0.06)),
         ])
     }
 
@@ -571,10 +570,8 @@ impl Chat {
     pub fn carved(&self) -> Elevation {
         if self.glass {
             return Elevation::of([
-                // `--in`: a dark fall inside the top, a hairline rim, and a lit line under the bottom.
+                // `--in`: a dark fall inside the top. No lit rim, for the reason in `glass_out`.
                 Shadow::inset(0.0, 1.0, 3.0, Color32::BLACK.at(0.35)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.06)).spread(1.0),
-                Shadow::outer(0.0, 1.0, 1.0, Color32::WHITE.at(0.03)),
             ]);
         }
         Elevation::of([
@@ -589,7 +586,6 @@ impl Chat {
             return Elevation::of([
                 // `--in-sm`.
                 Shadow::inset(0.0, 1.0, 2.0, Color32::BLACK.at(0.30)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.05)).spread(1.0),
             ]);
         }
         Elevation::of([
@@ -604,8 +600,7 @@ impl Chat {
             return Elevation::of([
                 // `--grad-out`.
                 Shadow::outer(0.0, 6.0, 20.0, self.action_glow),
-                Shadow::inset(0.0, 2.0, 3.0, Color32::WHITE.at(0.16)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.10)).spread(1.0),
+                Shadow::inset(0.0, 4.0, 10.0, Color32::WHITE.at(0.10)),
             ]);
         }
         Elevation::of([
@@ -627,11 +622,10 @@ impl Chat {
     pub fn floating(&self) -> Elevation {
         if self.glass {
             return Elevation::of([
-                // The Chat settings dialog under glass: `0 24px 60px rgba(0,0,0,.5)`, a lit top edge
-                // and a hairline rim.
+                // The Chat settings dialog under glass: `0 24px 60px rgba(0,0,0,.5)` and light from
+                // the top, with no line along any edge (see `glass_out`).
                 Shadow::outer(0.0, 24.0, 60.0, Color32::BLACK.at(0.50)),
-                Shadow::inset(0.0, 2.0, 4.0, Color32::WHITE.at(0.08)),
-                Shadow::inset(0.0, 0.0, 0.0, Color32::WHITE.at(0.07)).spread(1.0),
+                Shadow::inset(0.0, 6.0, 18.0, Color32::WHITE.at(0.05)),
             ]);
         }
         Elevation::of([
