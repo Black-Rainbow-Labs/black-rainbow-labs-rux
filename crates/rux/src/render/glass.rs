@@ -240,8 +240,8 @@ fn ring(pane: &Pane, glass: &Glass, inset: f32, cuts: [usize; 4], feather: bool)
 
 /// The glass as rings and a centre, and the triangles that join them.
 ///
-/// `feather` is how far outside the edge the faded ring is, in the layer's points: one physical pixel,
-/// which is the feather `egui` gives its own rounded rectangles.
+/// `feather` is how wide the faded band round the edge is, centred on the edge, in the layer's points: one
+/// physical pixel, which is the feather `egui` gives its own rounded rectangles.
 pub fn geometry(glass: &Glass, pane: &Pane, feather: f32) -> (Vec<Sample>, Vec<u32>) {
     let half = pane.rect.width().min(pane.rect.height()) / 2.0;
     let radii = radii(pane.rect, pane.corners);
@@ -249,12 +249,16 @@ pub fn geometry(glass: &Glass, pane: &Pane, feather: f32) -> (Vec<Sample>, Vec<u
     let deepest = pane.bevel.min(half - 0.25).max(0.0);
     let mut samples = Vec::new();
     let mut rings = Vec::new();
-    // The faded ring outside the edge, then the edge, then deeper rings across the rim.
+    // The faded ring half a pixel outside the edge, the whole ring half a pixel inside it, then deeper rings
+    // across the rim. **The fade is centred on the edge**, the way the surface's own tint is antialiased
+    // over it (`task-2281`, fourth pass): with the glass whole up to the edge and the tint only half there
+    // at it, the edge pixel had the whole picture and half the tint's darkening, a light line on a bright
+    // picture.
     rings.push(samples.len());
-    samples.extend(ring(pane, glass, -feather, cuts, true));
+    samples.extend(ring(pane, glass, -feather * 0.5, cuts, true));
     for step in 0..=RINGS {
         rings.push(samples.len());
-        let inset = deepest * step as f32 / RINGS as f32;
+        let inset = (deepest * step as f32 / RINGS as f32).max(feather * 0.5);
         samples.extend(ring(pane, glass, inset, cuts, false));
     }
     let around = samples.len() / rings.len();
@@ -383,7 +387,46 @@ pub fn cut(mesh: &Mesh, top: f32, bottom: f32) -> Mesh {
             out.indices.extend([first, first + 1, first + 2]);
             continue;
         }
-        let kept = clip(&clip(&corners, top, true), bottom, false);
+        let row = |v: &Vertex| v.uv.y;
+        let kept = clip(&clip(&corners, row, top, true), row, bottom, false);
+        if kept.len() < 3 {
+            continue;
+        }
+        out.vertices.extend(kept.iter().copied());
+        for next in 1..kept.len() as u32 - 1 {
+            out.indices.extend([first, first + next, first + next + 1]);
+        }
+    }
+    out
+}
+
+/// The part of `mesh` inside `rect`, in the mesh's own positions, cut where its triangles cross the edge.
+///
+/// A piece of glass is an `egui` mesh drawn beside the layer's rasterised runs, so a rounded clip the
+/// layer has open, such as a board lane round its scrolling cards, does not reach it the way it reaches
+/// the runs: a card scrolled past the top of its lane drew its glass over the lane's heading
+/// (`task-2281`). The glass is cut to the clip's rectangle. Its rounded corners are not followed, so a
+/// piece of glass passing under a clip's corner shows by the corner's radius at most.
+///
+/// @param mesh - a piece of glass's shape
+/// @param rect - what it may be drawn inside
+pub fn clip_to_rect(mesh: &Mesh, rect: Rect) -> Mesh {
+    let mut out = Mesh { texture_id: mesh.texture_id, ..Mesh::default() };
+    let x = |v: &Vertex| v.pos.x;
+    let y = |v: &Vertex| v.pos.y;
+    for triangle in mesh.indices.chunks_exact(3) {
+        let corners = [0, 1, 2].map(|i| mesh.vertices[triangle[i] as usize]);
+        let inside = corners.iter().all(|v| rect.contains(v.pos));
+        let first = out.vertices.len() as u32;
+        if inside {
+            out.vertices.extend(corners);
+            out.indices.extend([first, first + 1, first + 2]);
+            continue;
+        }
+        let kept = clip(&corners, x, rect.min.x, true);
+        let kept = clip(&kept, x, rect.max.x, false);
+        let kept = clip(&kept, y, rect.min.y, true);
+        let kept = clip(&kept, y, rect.max.y, false);
         if kept.len() < 3 {
             continue;
         }
@@ -396,14 +439,14 @@ pub fn cut(mesh: &Mesh, top: f32, bottom: f32) -> Mesh {
 }
 
 /// One step of Sutherland and Hodgman's clipping: the part of a polygon on one side of the line where
-/// the texture's row is `at`.
-fn clip(polygon: &[Vertex], at: f32, below: bool) -> Vec<Vertex> {
-    let inside = |v: &Vertex| if below { v.uv.y >= at } else { v.uv.y <= at };
+/// `value` of a vertex is `at`, the side at or above it when `above` and at or below it otherwise.
+fn clip(polygon: &[Vertex], value: impl Fn(&Vertex) -> f32, at: f32, above: bool) -> Vec<Vertex> {
+    let inside = |v: &Vertex| if above { value(v) >= at } else { value(v) <= at };
     let mut out = Vec::with_capacity(polygon.len() + 2);
     for (i, current) in polygon.iter().enumerate() {
         let previous = &polygon[(i + polygon.len() - 1) % polygon.len()];
         if inside(current) != inside(previous) {
-            let t = (at - previous.uv.y) / (current.uv.y - previous.uv.y);
+            let t = (at - value(previous)) / (value(current) - value(previous));
             let mix =
                 |a: u8, b: u8| (f32::from(a) + (f32::from(b) - f32::from(a)) * t).round() as u8;
             let [pa, pb] = [previous.color.to_array(), current.color.to_array()];
@@ -566,6 +609,34 @@ mod tests {
             matches!(&drawn[0], Shape::Mesh(mesh) if mesh.texture_id == TextureId::default()),
             "the cover goes first, untextured"
         );
+    }
+
+    #[test]
+    fn glass_cut_to_a_clip_stays_inside_it_and_keeps_its_area_there() {
+        // A card scrolled half past the top of its lane (task-2281): only the part inside the lane is drawn.
+        let pane = card();
+        let backdrop = Backdrop::single(
+            TextureId::User(1),
+            Rect::from_min_size(Pos2::ZERO, Vec2::new(500.0, 200.0)),
+            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+            1.0,
+        );
+        let drawn = shapes(&Glass::DESIGN, &pane, &backdrop, Default::default(), 1.0);
+        let Shape::Mesh(whole) = &drawn[1] else { panic!("expected the bent picture") };
+        let lane = Rect::from_min_max(Pos2::new(-10.0, 76.0), Pos2::new(600.0, 400.0));
+        let kept = clip_to_rect(whole, lane);
+        assert!(kept.vertices.iter().all(|v| lane.expand(0.01).contains(v.pos)));
+        let area = |mesh: &Mesh| -> f32 {
+            mesh.indices
+                .chunks_exact(3)
+                .map(|t| {
+                    let [a, b, c] = [0, 1, 2].map(|i| mesh.vertices[t[i] as usize].pos);
+                    ((b - a).x * (c - a).y - (b - a).y * (c - a).x).abs() / 2.0
+                })
+                .sum()
+        };
+        let half = area(whole) * (152.0 - 76.0) / 152.0;
+        assert!((area(&kept) - half).abs() < half * 0.05, "{} against {half}", area(&kept));
     }
 
     #[test]

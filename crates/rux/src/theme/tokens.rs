@@ -504,31 +504,22 @@ impl Chat {
         }
     }
 
-    /// `--out`: a card under glass. A long soft fall, light coming in softly from the top, and a faint
-    /// glow inside.
+    /// `--out`: a card under glass: a long soft fall and nothing else.
     ///
-    /// There is no line along any edge (`task-2281`, third pass). The design's lit top edge, a one point
-    /// line, and its hairline rim each read as a white stroke round every card and button over the
-    /// picture, even at a few percent, because the glass's own refraction already draws the outline. The
-    /// light from the top is a glow six points down and eighteen across, so it lights the upper part of
-    /// the surface without drawing a line. Unluminous's `tools/glass-rims.py` is the
-    /// measurement that finds a line.
+    /// There is no light along any edge and no glow inside (`task-2281`, third and fourth passes). The
+    /// design's lit top edge and hairline rim read as a white stroke round every card and button over the
+    /// picture, and so did the soft inner glows that replaced them: an inset shadow lights every edge of a
+    /// small surface, and a chip's glass shows the picture without the window's smoke, so on a bright picture
+    /// its edge was the brightest thing near it. Unluminous's `tools/glass-rims.py` is the measurement that
+    /// finds a line, and it has to be run on a bright picture.
     fn glass_out() -> Elevation {
-        Elevation::of([
-            Shadow::outer(0.0, 16.0, 36.0, Color32::BLACK.at(0.38)),
-            Shadow::inset(0.0, 6.0, 18.0, Color32::WHITE.at(0.05)),
-            Shadow::inset(0.0, 0.0, 22.0, Color32::WHITE.at(0.03)),
-        ])
+        Elevation::of([Shadow::outer(0.0, 16.0, 36.0, Color32::BLACK.at(0.38))])
     }
 
     /// `--out-sm`: a bubble, a round button or a chip under glass. See [`Self::glass_out`].
     fn glass_out_sm() -> Elevation {
-        Elevation::of([
-            Shadow::outer(0.0, 6.0, 16.0, Color32::BLACK.at(0.34)),
-            Shadow::inset(0.0, 4.0, 10.0, Color32::WHITE.at(0.06)),
-        ])
+        Elevation::of([Shadow::outer(0.0, 6.0, 16.0, Color32::BLACK.at(0.34))])
     }
-
 
     /// `--out: -7px -7px 16px light, 8px 8px 18px dark`: a card.
     pub fn raised(&self) -> Elevation {
@@ -600,7 +591,6 @@ impl Chat {
             return Elevation::of([
                 // `--grad-out`.
                 Shadow::outer(0.0, 6.0, 20.0, self.action_glow),
-                Shadow::inset(0.0, 4.0, 10.0, Color32::WHITE.at(0.10)),
             ]);
         }
         Elevation::of([
@@ -622,10 +612,9 @@ impl Chat {
     pub fn floating(&self) -> Elevation {
         if self.glass {
             return Elevation::of([
-                // The Chat settings dialog under glass: `0 24px 60px rgba(0,0,0,.5)` and light from
-                // the top, with no line along any edge (see `glass_out`).
+                // The Chat settings dialog under glass: `0 24px 60px rgba(0,0,0,.5)` and nothing along
+                // any edge (see `glass_out`).
                 Shadow::outer(0.0, 24.0, 60.0, Color32::BLACK.at(0.50)),
-                Shadow::inset(0.0, 6.0, 18.0, Color32::WHITE.at(0.05)),
             ]);
         }
         Elevation::of([
@@ -680,6 +669,12 @@ impl Glass {
         strength_most: 36.0,
         strength_scale: 1.7,
     };
+
+    /// The deepest a panel's rim is, in points: see `Chrome::panel`.
+    pub const PANEL_BEVEL: f32 = 12.0;
+
+    /// The furthest a panel bends the picture, in points: see `Chrome::panel`.
+    pub const PANEL_STRENGTH: f32 = 8.0;
 
     /// How deep the rim of a shape this size is, in points.
     pub fn bevel_for(&self, size: egui::Vec2) -> f32 {

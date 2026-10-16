@@ -5,7 +5,7 @@
 A glazed theme draws every raised surface as glass that **bends** the picture behind the window, the
 way a lens does, instead of blurring it or hiding it. The edges pull the picture in, the middle magnifies
 it, and red, green and blue are bent by slightly different amounts, so an edge carries a faint colour
-split. Over the bent picture each surface keeps a light tint, a lit top edge, a hairline rim and a long
+split. Over the bent picture each surface keeps a light tint and a long
 soft shadow. Carved wells are a dark tint with no bend.
 
 It came from a Claude Design canvas ("Unluminous", page "Agent-Chat 2"), which builds it in a browser
@@ -61,6 +61,15 @@ glass: the decoration before it is one texture, the bent picture is drawn, and t
 another texture. That is what puts a carved track over the card it is carved into and under the pill
 raised out of it.
 
+`Chrome::panel` is the same surface for a large pane. A lens magnifies the picture inside it by an amount
+that grows with the bend's strength, and a card's strength on a pane the size of half the window magnified
+the picture until its pixels showed. A panel's bevel and strength are capped at `Glass::PANEL_BEVEL` and
+`Glass::PANEL_STRENGTH`.
+
+Glass is an `egui` mesh drawn beside the rasterised decoration, so a `Decor::Clip` round it does not reach
+it by itself. `glazed` cuts each glass mesh to the clips open round it (`glass::clip_to_rect`), which is
+what keeps a card scrolled under the top of a list inside the list.
+
 `render::glass::shapes` is public, for an application that paints a surface with egui directly and wants
 it to be glass too. Unluminous uses it for egui's own popup frames and for its canvas nodes.
 
@@ -75,12 +84,17 @@ both sides all round and 44 along the top.
   edge and fade only outside it. Along the outline the picture was added over a cover that was already
   partly gone. `glass::shapes` now builds the cover from `geometry`'s own points and triangles, so the cover
   and the passes leave the same share of what is behind at every point, and a test checks it.
-- **The glass elevations have no hairline rim and no lit edge line.** The light from the top is a glow six
-  points down and eighteen across (four and ten on a chip), so it lights the upper part of a surface without
-  drawing a line. `glass_out`, `glass_out_sm`, `carved`, `carved_sm`, `action_raised` and `floating` in
-  `theme/tokens.rs`.
+- **The raised glass elevations are an outer shadow and nothing else.** No hairline rim, no lit edge line
+  and no inner glow: an inner white glow lit every edge of a surface, which on a bright picture read as a
+  ring. A carved well under glass is one dark inner shadow with no light half. `glass_out`, `glass_out_sm`,
+  `carved`, `carved_sm`, `action_raised` and `floating` in `theme/tokens.rs`.
+- **The glass fades across its edge, centred on it.** The tint is antialiased half a pixel either side of
+  the outline, and the glass used to fade only outside it, so on the outline the tint was over a full share
+  of picture and was brighter. The feather ring now sits half a feather outside the outline and the first
+  full ring half a feather inside it.
 
-After both, the same chips measure +2 all round and +4 along the top, the +4 being the soft light.
+After all of these, on a bright picture at 1.5 pixels a point, the chips in Unluminous's title bar measure
++0.9 all round and +2.8 along the top.
 
 ## What it costs
 
@@ -91,24 +105,18 @@ time per frame went up by about 0.4 ms against the same pane in the dark theme.
 
 The decoration of a layer with glass is rasterised on the processor, one canvas for each run between two
 pieces of glass, and on the frame a large surface first appears that was most of the frame: Unluminous's
-Settings window rasterised 6.6 million pixels in 104 ms. Under glass the outline is the glass mesh, drawn by
-the graphics card, and a canvas holds only a tint and soft shadows, so two limits apply to a canvas in a
-glass layer and to no other:
+Settings window rasterised 6.6 million pixels in 104 ms. **A run of nothing but outer shadows is rasterised
+at two pixels to the smallest deviation**, never below a quarter of a pixel a point (`SHADOW_LEAST_SCALE`):
+a Gaussian has no finer detail, a glass surface's shadow is not cut at its outline, and the glass's cover
+hides what lies under the surface. Nothing else is drawn below the display's resolution.
 
-- **At most one pixel a point** (`GLASS_MAX_SCALE`), where other canvases go up to `MAX_SCALE`.
-- **At most 250,000 pixels** (`GLASS_CANVAS_PIXELS`); a larger run is rasterised at a lower scale and drawn
-  back at full size with linear filtering.
-- **A run of nothing but outer shadows at two pixels to the smallest deviation**, never below a quarter of a
-  pixel a point (`SHADOW_LEAST_SCALE`): a Gaussian has no finer detail, and the surface's glass covers where
-  the shadow meets its edge.
-- **A surface's tint and inner glows at half a pixel a point** (`TINT_SCALE`): the run after a piece of glass
-  holds only a faint fill whose outline the glass mesh draws, and glows as soft as a shadow.
-
-The same limits apply to every layer under a glazed theme, including one with no glass in it. Measured on
-Unluminous's Settings window, the first opening went from 172 ms to 23 ms.
-
-Zoomed crops before and after cannot be told apart. `render::cost::take` says what was rasterised and built
-on this thread since it was last asked, for an application's frame trace.
+0.92.0 went further and drew a surface's tint and inner glow at half a pixel a point, every glass canvas at
+one pixel a point at most and a large one at 250,000 pixels at most. Those are cut at the surface's outline,
+so at low resolution the outline smeared a pixel or two outward: on a bright picture every chip had a light
+ring round it and edges looked pixelated. It looked right on the test machine because its display was close
+to one pixel a point and its picture was dark. Check anything about glass on a bright picture and at a
+display density of at least 1.5. `render::cost::take` says what was rasterised and built on this thread
+since it was last asked, for an application's frame trace.
 
 **A canvas not drawn is kept for twenty seconds** (`KEEP_UNUSED`): it lets go of its processor copy at once
 and keeps its texture, so a modal closed and opened again, or a pane hidden and shown again, is drawn from

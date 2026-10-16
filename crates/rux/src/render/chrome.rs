@@ -111,8 +111,30 @@ impl Chrome {
         fill: impl Into<Fill>,
         elevation: Elevation,
     ) {
-        let corners = radius.into();
-        let fill = fill.into();
+        self.surface_bending(rect, radius.into(), fill.into(), elevation, None);
+    }
+
+    /// [`Self::surface`] for a panel: a large surface other surfaces sit on, such as a pane of a window.
+    ///
+    /// Its glass bends only a thin rim, at most [`crate::theme::Glass::PANEL_BEVEL`] deep and by at most
+    /// [`crate::theme::Glass::PANEL_STRENGTH`], which is Apple's sidebar: a sheet of glass whose edge
+    /// catches the light (`task-2281`). With a card's bend a panel the size of a window's editing area
+    /// magnified the picture across its whole interior and stretched it across a thirty point rim, which
+    /// showed the picture's own pixels and its compression.
+    pub fn panel(&self, rect: Rect, radius: impl Into<Corners>, fill: impl Into<Fill>, elevation: Elevation) {
+        let cap = (crate::theme::Glass::PANEL_BEVEL, crate::theme::Glass::PANEL_STRENGTH);
+        self.surface_bending(rect, radius.into(), fill.into(), elevation, Some(cap));
+    }
+
+    /// [`Self::surface`], with the glass's bevel and strength capped at `cap` when it has one.
+    fn surface_bending(
+        &self,
+        rect: Rect,
+        corners: Corners,
+        fill: Fill,
+        elevation: Elevation,
+        cap: Option<(f32, f32)>,
+    ) {
         let representative = corners.representative();
 
         let outer: Vec<_> = elevation.shadows().filter(|shadow| !shadow.inset).collect();
@@ -150,11 +172,12 @@ impl Chrome {
         // well has no outer shadow, so neither is glass.
         if let Some(glass) = self.glass.filter(|_| has_outer && !fill.is_opaque()) {
             let size = rect.size();
+            let (most_bevel, most_strength) = cap.unwrap_or((f32::INFINITY, f32::INFINITY));
             self.push(Decor::Glass {
                 rect,
                 corners,
-                bevel: glass.bevel_for(size),
-                strength: glass.strength_for(size),
+                bevel: glass.bevel_for(size).min(most_bevel),
+                strength: glass.strength_for(size).min(most_strength),
             });
         }
 

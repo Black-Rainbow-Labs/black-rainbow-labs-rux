@@ -79,12 +79,6 @@ pub fn layer<R>(
     // **One texture when there is nothing to bend**, which is every layer in a theme that is not glass
     // and every layer with no picture behind it: the canvas draws nothing for a glass item.
     let Some(backdrop) = backdrop else {
-        // Under a glazed theme every layer keeps the glass limits, including one with no glass in it, such
-        // as a card's wells and chips, which sit on glass and are as soft.
-        let scale = match state.theme().glass {
-            Some(_) => glass_canvas_scale(&items, area, scale),
-            None => scale,
-        };
         let drawn = state.canvases.borrow_mut().texture_for(&ctx, id, area, scale, &items);
         if let Some((texture, rect)) = drawn {
             painter.set(slot, image(texture, rect));
@@ -103,6 +97,79 @@ fn image(texture: egui::TextureId, rect: Rect) -> egui::Shape {
     egui::Shape::image(texture, rect, uv, egui::Color32::WHITE)
 }
 
+/// The scale to rasterise one run of a glass layer at: `scale`, or less for a run of nothing but outer
+/// shadows (`task-2281`).
+///
+/// A Gaussian has no detail finer than its standard deviation, so two pixels to a deviation draw it as
+/// well as twenty. A glass surface's fill is translucent, so its outer shadows are not cut at its outline
+/// (`Chrome::surface` cuts only under an opaque fill), and what of them lies under the surface is hidden by
+/// the glass's own cover: no edge in such a run is drawn at the canvas's resolution. On the Settings
+/// window's first opening those runs were six of its canvases and most of its pixels.
+///
+/// Nothing else is drawn below the display's resolution. A surface's tint and its inner glow are cut at
+/// its outline, and 0.92.0 drew them at half a pixel a point: the outline smeared a pixel or two outward
+/// and read as a light ring round every chip over a bright picture, and edges looked pixelated.
+fn glass_canvas_scale(run: &[Decor], scale: f32) -> f32 {
+    let softest = run.iter().try_fold(f32::INFINITY, |least, item| match *item {
+        Decor::Shadow { inset: false, deviation, .. } => Some(least.min(deviation)),
+        _ => None,
+    });
+    match softest.filter(|deviation| deviation.is_finite() && *deviation > 0.0) {
+        Some(deviation) => scale.min((2.0 / deviation).max(SHADOW_LEAST_SCALE)),
+        None => scale,
+    }
+}
+
+/// The least scale a run of outer shadows is rasterised at under glass: a pixel every four points.
+pub const SHADOW_LEAST_SCALE: f32 = 0.25;
+
+/// The rectangle the clips that keep their insides leave open, or `None` when there are none.
+fn inside_the_clips(open: &[Decor]) -> Option<Rect> {
+    open.iter().fold(None, |bound: Option<Rect>, item| match *item {
+        Decor::Clip { rect, outside: false, .. } => {
+            Some(bound.map_or(rect, |bound| bound.intersect(rect)))
+        }
+        _ => bound,
+    })
+}
+
+#[cfg(test)]
+mod glass_canvas_tests {
+    use super::*;
+    use egui::{pos2, vec2, Color32};
+
+    fn shadow(deviation: f32) -> Decor {
+        Decor::Shadow {
+            rect: Rect::from_min_size(pos2(100.0, 100.0), vec2(300.0, 100.0)),
+            radius: 22.0,
+            deviation,
+            colour: Color32::BLACK,
+            inset: false,
+        }
+    }
+
+    #[test]
+    fn a_run_of_outer_shadows_is_rasterised_at_two_pixels_a_deviation() {
+        assert_eq!(glass_canvas_scale(&[shadow(18.0)], 1.5), SHADOW_LEAST_SCALE);
+        assert_eq!(glass_canvas_scale(&[shadow(2.0)], 1.5), 1.0);
+    }
+
+    #[test]
+    fn anything_with_an_edge_is_rasterised_at_the_displays_own_scale() {
+        // The white ring of task-2281's third review: a tint and its glow cut at the outline, drawn at half
+        // a pixel a point, smeared outward.
+        let rect = Rect::from_min_size(pos2(100.0, 100.0), vec2(300.0, 100.0));
+        let fill = Decor::Rect { rect, corners: Corners::from(22.0), fill: Fill::from(Color32::GRAY) };
+        let glow = Decor::Shadow { rect, radius: 22.0, deviation: 9.0, colour: Color32::WHITE, inset: true };
+        let clip = Decor::Clip { rect, corners: Corners::from(22.0), outside: false, bound: rect };
+        assert_eq!(glass_canvas_scale(&[fill, clip, glow, Decor::Unclip], 1.5), 1.5);
+        assert_eq!(glass_canvas_scale(&[clip, shadow(18.0), Decor::Unclip], 1.5), 1.5);
+        let wide = Rect::from_min_size(pos2(0.0, 0.0), vec2(1800.0, 1200.0));
+        let big = Decor::Rect { rect: wide, corners: Corners::from(22.0), fill: Fill::from(Color32::GRAY) };
+        assert_eq!(glass_canvas_scale(&[big], 1.5), 1.5, "a large surface keeps its resolution too");
+    }
+}
+
 /// A layer's decoration with glass in it: the list cut at each piece of glass, each run rasterised as
 /// a texture of its own and each piece of glass drawn as the bent picture between them (`task-2281`).
 ///
@@ -110,100 +177,6 @@ fn image(texture: egui::TextureId, rect: Rect) -> egui::Shape {
 /// raised out of it. A rounded clip still open when the list is cut is closed at the end of one run and
 /// opened again at the start of the next, so each run is a complete drawing.
 #[allow(clippy::too_many_arguments)]
-/// The most pixels one canvas in a layer with glass is rasterised at (`task-2281`).
-///
-/// Under glass a surface's outline is the glass mesh, drawn by the graphics card at the display's own
-/// resolution. What its canvas holds is the surface's tint and its shadows and glows, which are soft by
-/// nature, and on a large surface they were most of a frame: the Settings window's opening frame
-/// rasterised 6.6 million pixels in 104 ms. So a canvas larger than this is rasterised at a lower scale
-/// and drawn back at full size with linear filtering. A card, a chip or a field is smaller and keeps the
-/// full scale.
-pub const GLASS_CANVAS_PIXELS: f32 = 250_000.0;
-
-/// The scale to rasterise one run of a glass layer at: `scale`, or less when the run covers more than
-/// [`GLASS_CANVAS_PIXELS`].
-fn glass_canvas_scale(run: &[Decor], area: Rect, scale: f32) -> f32 {
-    let mut at = scale.min(GLASS_MAX_SCALE);
-    // **A run of nothing but outer shadows has no detail at all**: a Gaussian is as smooth as its standard
-    // deviation, so two pixels to a deviation draw it as well as twenty, and the surface's own glass covers
-    // the inside, where the shadow meets its edge. The Settings window's card shadows and its own shadow
-    // across the window were six of its canvases and most of its pixels.
-    let softest = run.iter().try_fold(f32::INFINITY, |least, item| match *item {
-        Decor::Shadow { inset: false, deviation, .. } => Some(least.min(deviation)),
-        Decor::Clip { .. } | Decor::Unclip => Some(least),
-        _ => None,
-    });
-    if let Some(deviation) = softest.filter(|deviation| deviation.is_finite() && *deviation > 0.0) {
-        at = at.min((2.0 / deviation).max(SHADOW_LEAST_SCALE));
-    }
-    // **A surface's own tint and its inner glows** are the run after its glass: a faint fill whose outline
-    // the glass mesh has already drawn at the display's resolution, and glows as soft as a shadow.
-    let tint = run.iter().any(|item| matches!(item, Decor::Rect { .. }))
-        && run.iter().all(|item| {
-            matches!(item, Decor::Rect { .. } | Decor::Shadow { inset: true, .. } | Decor::Clip { .. } | Decor::Unclip)
-        });
-    if tint {
-        at = at.min(TINT_SCALE);
-    }
-    let Some(bounds) = bounds_of(run).map(|bounds| bounds.intersect(area)) else { return at };
-    let points = bounds.width().max(0.0) * bounds.height().max(0.0);
-    match points * at * at > GLASS_CANVAS_PIXELS {
-        true => (GLASS_CANVAS_PIXELS / points).sqrt(),
-        false => at,
-    }
-}
-
-/// The most pixels a point any canvas in a layer with glass is rasterised at, for the reason
-/// [`GLASS_CANVAS_PIXELS`] gives: on a display at one and a half pixels a point this is less than half the
-/// pixels, and the tint and the soft shadows look the same.
-pub const GLASS_MAX_SCALE: f32 = 1.0;
-
-/// The scale a surface's tint and inner glows are rasterised at under glass: a pixel every two points.
-pub const TINT_SCALE: f32 = 0.5;
-
-/// The least scale a run of outer shadows is rasterised at under glass: a pixel every four points.
-pub const SHADOW_LEAST_SCALE: f32 = 0.25;
-
-#[cfg(test)]
-mod glass_canvas_tests {
-    use super::*;
-    use egui::{pos2, vec2, Color32};
-
-    fn area() -> Rect {
-        Rect::from_min_size(pos2(0.0, 0.0), vec2(2000.0, 2000.0))
-    }
-
-    #[test]
-    fn a_run_of_outer_shadows_is_rasterised_at_two_pixels_a_deviation() {
-        let shadow = Decor::Shadow {
-            rect: Rect::from_min_size(pos2(100.0, 100.0), vec2(300.0, 100.0)),
-            radius: 22.0,
-            deviation: 18.0,
-            colour: Color32::BLACK,
-            inset: false,
-        };
-        assert_eq!(glass_canvas_scale(&[shadow], area(), 1.5), SHADOW_LEAST_SCALE);
-        let sharp = Decor::Shadow {
-            rect: Rect::from_min_size(pos2(100.0, 100.0), vec2(300.0, 100.0)),
-            radius: 22.0,
-            deviation: 2.0,
-            colour: Color32::BLACK,
-            inset: false,
-        };
-        assert_eq!(glass_canvas_scale(&[sharp], area(), 1.5), 1.0);
-    }
-
-    #[test]
-    fn a_tint_with_its_glows_is_half_scale_and_anything_crisp_keeps_a_whole_pixel() {
-        let rect = Rect::from_min_size(pos2(100.0, 100.0), vec2(300.0, 100.0));
-        let fill = Decor::Rect { rect, corners: Corners::from(22.0), fill: Fill::from(Color32::GRAY) };
-        let glow = Decor::Shadow { rect, radius: 22.0, deviation: 9.0, colour: Color32::WHITE, inset: true };
-        assert_eq!(glass_canvas_scale(&[fill, glow], area(), 1.5), TINT_SCALE);
-        let line = Decor::Line { from: rect.min, to: rect.max, width: 1.0, colour: Color32::WHITE };
-        assert_eq!(glass_canvas_scale(&[fill, glow, line], area(), 1.5), GLASS_MAX_SCALE);
-    }
-}
-
 fn glazed(
     ctx: &egui::Context,
     painter: &egui::Painter,
@@ -230,7 +203,7 @@ fn glazed(
                 0 => id,
                 n => id.with(("rux-glass-run", n)),
             };
-            let run_scale = glass_canvas_scale(run, area, scale);
+            let run_scale = glass_canvas_scale(run, scale);
             let drawn = state.canvases.borrow_mut().texture_for(ctx, run_id, area, run_scale, run);
             if let Some((texture, rect)) = drawn {
                 shapes.push(image(texture, rect));
@@ -253,7 +226,19 @@ fn glazed(
                 };
                 let pane_id = id.with(("rux-glass", panes));
                 panes += 1;
-                shapes.extend(state.canvases.borrow_mut().glass_for(pane_id, built));
+                let glass = state.canvases.borrow_mut().glass_for(pane_id, built);
+                // Cut to the clips open round it, which reach the rasterised runs but not an `egui` mesh.
+                match inside_the_clips(&open) {
+                    Some(bound) if !bound.contains_rect(rect) => {
+                        shapes.extend(glass.into_iter().map(|shape| match shape {
+                            egui::Shape::Mesh(mesh) => {
+                                egui::Shape::mesh(glass::clip_to_rect(&mesh, bound))
+                            }
+                            other => other,
+                        }));
+                    }
+                    _ => shapes.extend(glass),
+                }
             }
             Decor::Clip { .. } => {
                 open.push(item);
