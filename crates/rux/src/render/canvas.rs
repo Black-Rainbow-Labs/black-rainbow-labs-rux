@@ -60,6 +60,8 @@ pub struct Canvas {
     context: RenderContext,
     resources: Resources,
     pixmap: Pixmap,
+    /// What the context was made with, so a canvas put by can make a new small one.
+    settings: RenderSettings,
     texture: Option<egui::TextureHandle>,
     drawn: Option<Drawn>,
     /// How many times this canvas has actually rasterised. Read by the test that says a still layer is
@@ -67,6 +69,8 @@ pub struct Canvas {
     rasterisations: u64,
     /// The frame this canvas was last asked for, which is how [`Canvases::tidy`] knows it is wanted.
     last_used: u64,
+    /// When it was last asked for, which is how long [`Canvases::tidy`] keeps it once it is not.
+    used_at: std::time::Instant,
 }
 
 impl std::fmt::Debug for Canvas {
@@ -90,10 +94,22 @@ impl Canvas {
             context: RenderContext::new_with(1, 1, settings),
             resources: Resources::new(),
             pixmap: Pixmap::new(1, 1),
+            settings,
             texture: None,
             drawn: None,
             rasterisations: 0,
             last_used: 0,
+            used_at: std::time::Instant::now(),
+        }
+    }
+
+    /// Let go of the processor's copy of a canvas that was not drawn this frame, and keep its texture and
+    /// what it was drawn from. A layer that comes back drawing the same thing is shown straight from the
+    /// texture; one that draws something else rasterises again into a new context.
+    fn put_by(&mut self) {
+        if self.pixmap.width() > 1 || self.pixmap.height() > 1 {
+            self.pixmap = Pixmap::new(1, 1);
+            self.context = RenderContext::new_with(1, 1, self.settings);
         }
     }
 
@@ -163,11 +179,13 @@ impl Canvas {
                 return Some((texture.id(), rect));
             }
         }
+        let started = std::time::Instant::now();
         self.rasterise(rect, scale, width, height, items);
         // Built here and handed straight over. `TextureHandle::set` takes ownership and the upload
         // happens at the end of the frame, so there is no buffer worth keeping and no reason to fill
         // one and then copy it.
         let image = egui::ColorImage::new([usize::from(width), usize::from(height)], self.pixels());
+        super::cost::rasterised(started, u64::from(width) * u64::from(height));
         match &mut self.texture {
             // Set rather than load, so a layer being typed into does not allocate a texture a keystroke.
             Some(texture) => texture.set(image, egui::TextureOptions::LINEAR),
@@ -392,16 +410,20 @@ fn rounded(rect: Rect, corners: Corners) -> BezPath {
     RoundedRect::from_rect(box_of(rect), radii).to_path(0.1)
 }
 
+/// How long a canvas or a piece of glass not drawn is kept before it is forgotten. See [`Canvases::tidy`].
+pub const KEEP_UNUSED: std::time::Duration = std::time::Duration::from_secs(20);
+
 /// Every canvas in this window, one per layer that draws decoration.
 ///
-/// Keyed on the `egui::Id` the layer was drawn with. A canvas whose id was not drawn this frame is
-/// dropped, so closing a popup gives its texture back.
+/// Keyed on the `egui::Id` the layer was drawn with. A canvas whose id was not drawn this frame gives back
+/// its processor memory at once and its texture after [`KEEP_UNUSED`], so a popup closed and opened again
+/// soon after is drawn from what it drew last time.
 #[derive(Debug, Default)]
 pub struct Canvases {
     by_id: HashMap<egui::Id, Canvas>,
     /// Each piece of glass's shapes and what they were built from, by the id the layer gave it, and the
     /// frame each was last asked for (`task-2281`).
-    glass: HashMap<egui::Id, (super::glass::Built, Vec<egui::Shape>, u64)>,
+    glass: HashMap<egui::Id, (super::glass::Built, Vec<egui::Shape>, u64, std::time::Instant)>,
     /// Which frame this is, counted by [`Canvases::tidy`].
     ///
     /// A counter rather than a list of what was drawn this frame: the list version compared lengths to
@@ -438,6 +460,7 @@ impl Canvases {
             false => Canvas::default(),
         });
         canvas.last_used = frame;
+        canvas.used_at = std::time::Instant::now();
         canvas.texture_for(ctx, id, rect, pixels_per_point, items)
     }
 
@@ -451,12 +474,14 @@ impl Canvases {
         built: super::glass::Built,
     ) -> Vec<egui::Shape> {
         let frame = self.frame;
-        if let Some((kept, shapes, used)) = self.glass.get_mut(&id) {
+        if let Some((kept, shapes, used, used_at)) = self.glass.get_mut(&id) {
             if *kept == built {
                 *used = frame;
+                *used_at = std::time::Instant::now();
                 return shapes.clone();
             }
         }
+        let started = std::time::Instant::now();
         let shapes = super::glass::shapes(
             &built.glass,
             &built.pane,
@@ -464,15 +489,25 @@ impl Canvases {
             built.to_global,
             built.pixels_per_point,
         );
-        self.glass.insert(id, (built, shapes.clone(), frame));
+        super::cost::glazed(started);
+        self.glass.insert(id, (built, shapes.clone(), frame, std::time::Instant::now()));
         shapes
     }
 
-    /// Forget the canvases of layers that were not drawn this frame. Called once, at the end of a frame.
+    /// Put by the canvases of layers that were not drawn this frame, and forget those not drawn for
+    /// [`KEEP_UNUSED`]. Called once, at the end of a frame.
+    ///
+    /// A canvas not drawn this frame keeps its texture for a while (`task-2281`): a modal closed and opened
+    /// again, or a pane put away and shown again, then draws straight from it instead of rasterising the
+    /// whole of its decoration on the frame it appears, which for the Settings window was 52 ms. The
+    /// processor's copy is let go of at once, so what is kept is the texture.
     pub fn tidy(&mut self) {
         let frame = self.frame;
-        self.by_id.retain(|_, canvas| canvas.last_used == frame);
-        self.glass.retain(|_, (_, _, used)| *used == frame);
+        self.by_id.retain(|_, canvas| canvas.last_used == frame || canvas.used_at.elapsed() < KEEP_UNUSED);
+        for canvas in self.by_id.values_mut().filter(|canvas| canvas.last_used != frame) {
+            canvas.put_by();
+        }
+        self.glass.retain(|_, (_, _, used, used_at)| *used == frame || used_at.elapsed() < KEEP_UNUSED);
         self.frame = self.frame.wrapping_add(1);
     }
 
@@ -505,6 +540,33 @@ mod tests {
         let bytes = pixmap.data_as_u8_slice();
         let colour = Color32::from_rgba_premultiplied(bytes[0], bytes[1], bytes[2], bytes[3]);
         assert_eq!(colour.to_array(), [10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn a_layer_drawn_again_soon_after_it_went_is_not_rasterised_again() {
+        // task-2281: a modal closed and opened again drew its whole decoration again on the frame it came
+        // back. A canvas not drawn for a frame is put by, and drawing the same thing again uses its texture.
+        let ctx = egui::Context::default();
+        let theme = light();
+        let chrome = Chrome::recording();
+        let rect = Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(120.0, 60.0));
+        chrome.surface(rect, 12.0, theme.surface.s1, theme.elevation.raised);
+        let items = chrome.take();
+        let id = egui::Id::new("comes back");
+        let mut canvases = Canvases { deterministic: true, ..Canvases::default() };
+
+        ctx.begin_pass(egui::RawInput::default());
+        assert!(canvases.texture_for(&ctx, id, rect.expand(40.0), 1.0, &items).is_some());
+        ctx.end_pass().textures_delta.clear();
+        canvases.tidy();
+        // A frame in which the layer is not drawn: the canvas lets go of its pixels and keeps its texture.
+        canvases.tidy();
+        assert_eq!(canvases.by_id[&id].bytes(), 4, "the processor's copy is let go of");
+
+        ctx.begin_pass(egui::RawInput::default());
+        assert!(canvases.texture_for(&ctx, id, rect.expand(40.0), 1.0, &items).is_some());
+        ctx.end_pass().textures_delta.clear();
+        assert_eq!(canvases.total_rasterisations(), 1, "the same decoration is drawn from the kept texture");
     }
 
     #[test]

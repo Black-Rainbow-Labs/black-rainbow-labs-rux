@@ -347,8 +347,7 @@ pub fn shapes(
 /// @param opacity - how much of what is behind it the cover hides, 0 to 255
 fn cover(samples: &[Sample], indices: &[u32], opacity: u8) -> Shape {
     let dark = Color32::from_rgba_premultiplied(0, 0, 0, opacity);
-    let mut mesh = Mesh::default();
-    mesh.vertices = samples
+    let vertices = samples
         .iter()
         .map(|sample| Vertex {
             pos: sample.at,
@@ -356,8 +355,7 @@ fn cover(samples: &[Sample], indices: &[u32], opacity: u8) -> Shape {
             color: if sample.feather { Color32::TRANSPARENT } else { dark },
         })
         .collect();
-    mesh.indices = indices.to_vec();
-    Shape::mesh(mesh)
+    Shape::mesh(Mesh { indices: indices.to_vec(), vertices, ..Mesh::default() })
 }
 
 /// The triangles of `mesh` whose texture rows lie between `top` and `bottom`, cut where they cross.

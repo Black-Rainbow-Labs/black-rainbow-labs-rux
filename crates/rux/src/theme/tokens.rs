@@ -511,8 +511,8 @@ impl Chat {
     /// line, and its hairline rim each read as a white stroke round every card and button over the
     /// picture, even at a few percent, because the glass's own refraction already draws the outline. The
     /// light from the top is a glow six points down and eighteen across, so it lights the upper part of
-    /// the surface without drawing a line. `rims.py` in `_agent_output/task-2281-glass/` of Unluminous is
-    /// the measurement that finds a line.
+    /// the surface without drawing a line. Unluminous's `tools/glass-rims.py` is the
+    /// measurement that finds a line.
     fn glass_out() -> Elevation {
         Elevation::of([
             Shadow::outer(0.0, 16.0, 36.0, Color32::BLACK.at(0.38)),

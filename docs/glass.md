@@ -64,13 +64,23 @@ raised out of it.
 `render::glass::shapes` is public, for an application that paints a surface with egui directly and wants
 it to be glass too. Unluminous uses it for egui's own popup frames and for its canvas nodes.
 
-## The lit edges are faint
+## No line along any edge
 
-The rim and the top highlight of a glass surface are a few percent of white: 7% for a card's rim and 9%
-for its top edge, 5% to 7% for a carved track. The first version used the design's own values, about
-twice that, and over a dark picture each card and button had a white line along its top that stood out
-from everything around it. Jason asked for them to blend in (task-2281, second pass). The values are in
-`Chat::glass` and the `glass_*` elevations in `theme/tokens.rs`.
+Glass draws no light line along its outline. Two things used to draw one, and both were measured with a
+script that reads a screenshot's brightness across each round control's rim (Unluminous's `tools/glass-rims.py`): the title bar's chips on Unluminous 0.91.0 had rims 27 levels brighter than
+both sides all round and 44 along the top.
+
+- **The cover fades on the passes' own mesh.** The dark cover under the three colour passes was an `egui`
+  rounded rectangle, whose one pixel feather is centred on the edge, while the passes stay whole up to the
+  edge and fade only outside it. Along the outline the picture was added over a cover that was already
+  partly gone. `glass::shapes` now builds the cover from `geometry`'s own points and triangles, so the cover
+  and the passes leave the same share of what is behind at every point, and a test checks it.
+- **The glass elevations have no hairline rim and no lit edge line.** The light from the top is a glow six
+  points down and eighteen across (four and ten on a chip), so it lights the upper part of a surface without
+  drawing a line. `glass_out`, `glass_out_sm`, `carved`, `carved_sm`, `action_raised` and `floating` in
+  `theme/tokens.rs`.
+
+After both, the same chips measure +2 all round and +4 along the top, the +4 being the soft light.
 
 ## What it costs
 
@@ -78,6 +88,31 @@ A piece of glass is about four hundred vertices, drawn three times, one for each
 shapes are kept per layer and built again only when the surface, the picture or the layer's transform
 moves, so a still frame builds nothing. Measured in Unluminous while scrolling its chat pane, egui's own
 time per frame went up by about 0.4 ms against the same pane in the dark theme.
+
+The decoration of a layer with glass is rasterised on the processor, one canvas for each run between two
+pieces of glass, and on the frame a large surface first appears that was most of the frame: Unluminous's
+Settings window rasterised 6.6 million pixels in 104 ms. Under glass the outline is the glass mesh, drawn by
+the graphics card, and a canvas holds only a tint and soft shadows, so two limits apply to a canvas in a
+glass layer and to no other:
+
+- **At most one pixel a point** (`GLASS_MAX_SCALE`), where other canvases go up to `MAX_SCALE`.
+- **At most 250,000 pixels** (`GLASS_CANVAS_PIXELS`); a larger run is rasterised at a lower scale and drawn
+  back at full size with linear filtering.
+- **A run of nothing but outer shadows at two pixels to the smallest deviation**, never below a quarter of a
+  pixel a point (`SHADOW_LEAST_SCALE`): a Gaussian has no finer detail, and the surface's glass covers where
+  the shadow meets its edge.
+- **A surface's tint and inner glows at half a pixel a point** (`TINT_SCALE`): the run after a piece of glass
+  holds only a faint fill whose outline the glass mesh draws, and glows as soft as a shadow.
+
+The same limits apply to every layer under a glazed theme, including one with no glass in it. Measured on
+Unluminous's Settings window, the first opening went from 172 ms to 23 ms.
+
+Zoomed crops before and after cannot be told apart. `render::cost::take` says what was rasterised and built
+on this thread since it was last asked, for an application's frame trace.
+
+**A canvas not drawn is kept for twenty seconds** (`KEEP_UNUSED`): it lets go of its processor copy at once
+and keeps its texture, so a modal closed and opened again, or a pane hidden and shown again, is drawn from
+what it drew last time instead of rasterising again.
 
 ## What it does not do
 
