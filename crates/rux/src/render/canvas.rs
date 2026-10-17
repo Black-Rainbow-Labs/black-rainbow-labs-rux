@@ -203,6 +203,17 @@ impl Canvas {
         self.texture.as_ref().map(|texture| (texture.id(), rect))
     }
 
+    /// The canvas's own picture of `items` over `rect` at `pixels_per_point`, for a test that compares another
+    /// way of drawing them against it.
+    #[cfg(test)]
+    pub(crate) fn picture(rect: Rect, pixels_per_point: f32, items: &[Decor]) -> ([usize; 2], Vec<Color32>) {
+        let mut canvas = Self::deterministic();
+        let width = (rect.width() * pixels_per_point).round() as u16;
+        let height = (rect.height() * pixels_per_point).round() as u16;
+        canvas.rasterise(rect, pixels_per_point, width, height, items);
+        ([usize::from(width), usize::from(height)], canvas.pixels())
+    }
+
     /// Replay the list into the renderer and take the pixels out.
     fn rasterise(
         &mut self,
@@ -418,7 +429,7 @@ pub const KEEP_UNUSED: std::time::Duration = std::time::Duration::from_secs(20);
 /// Keyed on the `egui::Id` the layer was drawn with. A canvas whose id was not drawn this frame gives back
 /// its processor memory at once and its texture after [`KEEP_UNUSED`], so a popup closed and opened again
 /// soon after is drawn from what it drew last time.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Canvases {
     by_id: HashMap<egui::Id, Canvas>,
     /// Each piece of glass's shapes and what they were built from, by the id the layer gave it, and the
@@ -433,12 +444,63 @@ pub struct Canvases {
     frame: u64,
     /// Built with the tests' pinned SIMD level rather than the machine's.
     deterministic: bool,
+    /// The shadow sprites a layer drawn as meshes uses (`task-2288`). See [`super::compose`].
+    sprites: super::compose::Sprites,
+    /// Whether layers are drawn as meshes where they can be, which they are unless `RUX_RASTER=canvas`.
+    canvas_only: bool,
+}
+
+impl Default for Canvases {
+    fn default() -> Self {
+        Self {
+            by_id: HashMap::new(),
+            glass: HashMap::new(),
+            frame: 0,
+            deterministic: false,
+            sprites: super::compose::Sprites::default(),
+            canvas_only: std::env::var("RUX_RASTER").is_ok_and(|named| named.trim() == "canvas"),
+        }
+    }
 }
 
 impl Canvases {
     /// The store the rendering tests use, whose canvases rasterise the same on every machine.
     pub fn deterministic() -> Self {
-        Self { deterministic: true, ..Self::default() }
+        let pinned = RenderSettings { level: vello_cpu::Level::baseline(), num_threads: 0 };
+        Self { deterministic: true, sprites: super::compose::Sprites::new(pinned), ..Self::default() }
+    }
+
+    /// One layer's decoration as meshes and sprites, or `None` when it has to be rasterised on a canvas: see
+    /// [`super::compose`]. `RUX_RASTER=canvas` answers `None` for every layer, which is how the two are
+    /// measured against each other.
+    ///
+    /// **A deterministic store always answers `None`**, so every screenshot test draws with the canvas as it
+    /// always has, and the pictures accepted on each platform stay what they were. The composer is held to the
+    /// canvas's pixels by its own tests in `compose.rs`, which compare the two directly.
+    ///
+    /// `RUX_DEBUG_FALLBACK=<file>` appends every layer that falls back to that file, as its `Decor` list, which is
+    /// how a layer that is still rasterised every time it changes is found.
+    pub fn compose(
+        &mut self,
+        ctx: &egui::Context,
+        pixels_per_point: f32,
+        items: &[Decor],
+        area: Rect,
+    ) -> Option<Vec<egui::Shape>> {
+        if self.canvas_only || self.deterministic {
+            return None;
+        }
+        let composed = super::compose::compose(ctx, &mut self.sprites, pixels_per_point, items, area);
+        if composed.is_none() {
+            super::cost::fell_back();
+            if let Some(file) = std::env::var_os("RUX_DEBUG_FALLBACK") {
+                use std::io::Write;
+                if let Ok(mut out) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
+                    let _ = writeln!(out, "{items:?}");
+                }
+            }
+        }
+        composed
     }
 
     /// Rasterise one layer's decoration and answer the texture to paint and where to paint it.
@@ -508,6 +570,7 @@ impl Canvases {
             canvas.put_by();
         }
         self.glass.retain(|_, (_, _, used, used_at)| *used == frame || used_at.elapsed() < KEEP_UNUSED);
+        self.sprites.tidy();
         self.frame = self.frame.wrapping_add(1);
     }
 

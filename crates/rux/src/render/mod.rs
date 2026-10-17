@@ -13,12 +13,14 @@
 
 mod canvas;
 mod chrome;
+pub mod compose;
 mod decor;
 pub mod cost;
 pub mod glass;
 
 pub use canvas::{Canvas, Canvases, MAX_SCALE};
 pub use chrome::Chrome;
+pub use compose::{compose, Sprites};
 pub use decor::{bounds_of, Corners, Decor, Fill};
 pub use glass::{backdrop_for, set_backdrop, Backdrop, Band, Plane};
 
@@ -79,7 +81,13 @@ pub fn layer<R>(
     // **One texture when there is nothing to bend**, which is every layer in a theme that is not glass
     // and every layer with no picture behind it: the canvas draws nothing for a glass item.
     let Some(backdrop) = backdrop else {
-        let drawn = state.canvases.borrow_mut().texture_for(&ctx, id, area, scale, &items);
+        let mut canvases = state.canvases.borrow_mut();
+        // As meshes, with every shadow a cached sprite, wherever that draws the same picture (`task-2288`).
+        if let Some(shapes) = canvases.compose(&ctx, scale, &items, area) {
+            painter.set(slot, egui::Shape::Vec(shapes));
+            return result;
+        }
+        let drawn = canvases.texture_for(&ctx, id, area, scale, &items);
         if let Some((texture, rect)) = drawn {
             painter.set(slot, image(texture, rect));
         }
@@ -204,9 +212,15 @@ fn glazed(
                 n => id.with(("rux-glass-run", n)),
             };
             let run_scale = glass_canvas_scale(run, scale);
-            let drawn = state.canvases.borrow_mut().texture_for(ctx, run_id, area, run_scale, run);
-            if let Some((texture, rect)) = drawn {
-                shapes.push(image(texture, rect));
+            let mut canvases = state.canvases.borrow_mut();
+            match canvases.compose(ctx, scale, run, area) {
+                Some(composed) => shapes.extend(composed),
+                None => {
+                    let drawn = canvases.texture_for(ctx, run_id, area, run_scale, run);
+                    if let Some((texture, rect)) = drawn {
+                        shapes.push(image(texture, rect));
+                    }
+                }
             }
         }
         runs += 1;

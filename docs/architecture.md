@@ -58,6 +58,33 @@ Because a `Decor` list is a plain value, a test can say "a raised surface record
 shadows, in the stylesheet's order, at the stylesheet's offsets" with no window, no graphics card and no
 fonts. `crates/rux/src/render/` has those tests.
 
+## A layer is drawn as meshes, and a shadow is a sprite (`task-2288`)
+
+Rasterising a whole layer on the processor is what made Unluminous slow to open things: its Settings window
+spent 62 to 77 ms in `vello_cpu` on the frame it opened, all of it on the thread that draws the window, and
+2.3 times as long again on a busy machine. Nearly every one of those pixels was a flat fill or the middle of a
+shadow whose rows are all the same. So `render::compose` draws a layer the way `egui` draws everything else:
+
+| `Decor` | Drawn as |
+|---|---|
+| `Rect`, `Disc` | a polygon with each corner its own radius, feathered one pixel at its edge as `egui` feathers every fill; a gradient is a colour on each vertex, which is exact for a two stop linear gradient |
+| `Ring`, `Line`, `Arc` | a stroke mesh feathered on both sides; an arc's round caps are discs |
+| `Shadow` outside a surface | a nine patch: the blurred rounded rectangle rasterised once, by `vello_cpu`'s own call, at a size that holds its four corners and a band of edge, and stretched to any size |
+| `Shadow` inside a carved surface | the same, rasterised with the surface's own clip, and drawn with no middle |
+| `Clip` | nothing for the cut under an opaque surface, which covers it anyway; a rectangle for a rounded clip nothing inside reaches the corners of |
+
+A sprite is rasterised in white and tinted by its vertex colour, which is the same premultiplied arithmetic, so
+one sprite serves every colour of shadow of that shape, and it is kept while it is used and twenty seconds after.
+Steady state is no rasterisation and no upload at all. A layer the composer cannot draw exactly answers `None`
+and is rasterised on its `Canvas` as before: glass, a translucent arc with round caps, a rounded clip something
+reaches into the corner of. `cost::Cost::fallbacks` counts those.
+
+**The tests compare the two renderers directly.** `compose.rs` draws the same list both ways, the meshes through a
+small software rasteriser with a GPU's top left rule, and asserts the difference: shadows within 4 units a
+channel, a carved well within 6, and a whole surface to a mean of 0.1. **A deterministic `Canvases` never
+composes**, so a screenshot test draws with the canvas and the pictures an application has accepted do not move.
+`RUX_RASTER=canvas` turns the composer off in a window, which is how the two are measured against each other.
+
 ## A layer reserves its slot first
 
 ```rust

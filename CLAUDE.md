@@ -108,6 +108,23 @@ And one optimisation that is only sound when it is checked: an outer shadow is c
 its own shape **only when the fill is opaque**, because a translucent surface really does show its
 own shadow through itself.
 
+## A layer is meshes and sprites wherever that is the same picture (task-2288)
+
+`render::compose` draws a layer as `egui` meshes: fills, gradients, discs, rings, lines and arcs with egui's
+one pixel feather, and every blurred rounded rectangle as a nine patch of a sprite rasterised once by
+`vello_cpu`'s own call and kept twenty seconds after it was last drawn. Unluminous measured a cold Settings
+opening go from 62 to 77 ms of rasterising to a few small sprites, and a still or scrolled layer costs no
+rasterisation and no upload at all. `docs/architecture.md` has the table of what is drawn how. Three rules:
+
+- **The composer only draws what it can draw exactly.** Anything else answers `None` and the layer is
+  rasterised on its canvas as before; `cost::Cost::fallbacks` counts those and `RUX_DEBUG_FALLBACK=<file>`
+  writes each one's `Decor` list. A new kind of `Decor`, or a new way of clipping one, is a fallback until
+  `compose.rs` draws it **and** its test compares it against the canvas.
+- **The tests compare the two renderers pixel by pixel**, through a software rasteriser in `compose.rs` with a
+  GPU's top left rule. A change to either renderer keeps them within the numbers those tests assert.
+- **A deterministic `Canvases` never composes**, so screenshot tests in rux and in Unluminous draw with the
+  canvas, and the pictures accepted on each platform do not move when the composer does.
+
 ## The version of `vello_cpu` is epaint's, and `multithreading` stays off
 
 `epaint` 0.36 already depends on `vello_cpu` 0.1 to rasterise the glyphs in its own atlas, so this

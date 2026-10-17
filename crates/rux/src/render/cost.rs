@@ -22,11 +22,14 @@ pub struct Cost {
     pub glass_ms: f64,
     /// How many pieces of glass were built rather than reused.
     pub glasses: u32,
+    /// How many layers the composer could not draw as meshes and left to a canvas (`task-2288`). See
+    /// [`super::compose`].
+    pub fallbacks: u32,
 }
 
 thread_local! {
     static SO_FAR: Cell<Cost> = const { Cell::new(Cost {
-        raster_ms: 0.0, canvases: 0, pixels: 0, glass_ms: 0.0, glasses: 0,
+        raster_ms: 0.0, canvases: 0, pixels: 0, glass_ms: 0.0, glasses: 0, fallbacks: 0,
     }) };
 }
 
@@ -54,6 +57,15 @@ pub(crate) fn glazed(started: Instant) {
         let mut now = cost.get();
         now.glass_ms += took;
         now.glasses += 1;
+        cost.set(now);
+    });
+}
+
+/// Note a layer the composer left to a canvas.
+pub(crate) fn fell_back() {
+    SO_FAR.with(|cost| {
+        let mut now = cost.get();
+        now.fallbacks += 1;
         cost.set(now);
     });
 }
