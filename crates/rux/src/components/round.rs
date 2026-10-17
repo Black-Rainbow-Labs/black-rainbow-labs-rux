@@ -196,15 +196,22 @@ impl<'a> PillButton<'a> {
         }
         .gamma_multiply(fade);
         let style = rux.zs(self.style());
-        let galley = rux.text(style, self.text, ink);
         let (left, right) = self.padding();
         let mark_width = match self.mark {
             Some(_) => rux.z(self.mark_size() + self.mark_gap()),
             None => 0.0,
         };
+        let room = rect.width() - rux.z(left + right);
+        // A pill handed less width than its words need ends them with `…` inside its padding, which is
+        // `text-overflow: ellipsis`, rather than letting them run out of its right edge. The point of
+        // slack keeps a pill handed exactly its measured width, rounded to the display, from losing a
+        // letter to rounding.
+        let mut galley = rux.text(style, self.text, ink);
+        if galley.size().x > room - mark_width + 1.0 {
+            galley = rux.elided(style, self.text, ink, (room - mark_width).max(0.0));
+        }
         let content = galley.size().x + mark_width;
         // Centred in whatever width it was handed, which is its own width when it was measured.
-        let room = rect.width() - rux.z(left + right);
         let start = rect.left() + rux.z(left) + ((room - content) / 2.0).max(0.0);
         if let Some(icon) = self.mark {
             let centre = Pos2::new(start + rux.z(self.mark_size() / 2.0), rect.center().y);

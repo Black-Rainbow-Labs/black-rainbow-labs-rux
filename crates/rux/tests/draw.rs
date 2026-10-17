@@ -554,3 +554,57 @@ fn every_board_part_draws_in_both_themes_on_both_screens() {
         }
     }
 }
+
+/// A pill handed less width than its words need ends them with `…` inside its own edge, rather than
+/// letting them run out of its right side (Unluminous `task-2282`, where a suggested action's label ran
+/// past its pill at some zoom levels). A pill handed its measured width keeps every letter.
+#[test]
+fn a_pill_too_narrow_for_its_words_keeps_them_inside_it() {
+    use rux::components::PillButton;
+    let ctx = egui::Context::default();
+    rux::text::install(&ctx);
+    let state = RuxState::new(Theme::named("dark-neumorphic").expect("a theme"));
+    state.set_screen(desktop());
+    let mut input = egui::RawInput::default();
+    input.screen_rect = Some(Rect::from_min_size(egui::pos2(0.0, 0.0), Vec2::new(1440.0, 900.0)));
+    let label = "Write the TDD for building this";
+    let mut pills = (Rect::NOTHING, Rect::NOTHING);
+    let mut shapes = Vec::new();
+    for _ in 0..3 {
+        let mut output = ctx.run_ui(input.clone(), |ui| {
+            rux::layer(ui, &state, egui::Id::new("pills"), ui.max_rect(), |rux| {
+                let size = PillButton::new(label).primary().measure(rux);
+                let squeezed = Rect::from_min_size(egui::pos2(20.0, 20.0), Vec2::new(size.x / 2.0, size.y));
+                let whole = Rect::from_min_size(egui::pos2(20.0, 100.0), size);
+                PillButton::new(label).primary().show(rux, squeezed);
+                PillButton::new(label).primary().show(rux, whole);
+                pills = (squeezed, whole);
+            });
+        });
+        output.textures_delta.clear();
+        shapes = output.shapes;
+    }
+    state.end_frame();
+    let texts: Vec<(Rect, String)> = shapes
+        .iter()
+        .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::Text(text) => Some((text.visual_bounding_rect(), text.galley.text().to_owned())),
+            _ => None,
+        })
+        .collect();
+    let (squeezed, whole) = pills;
+    let short = texts.iter().find(|(rect, _)| squeezed.contains(rect.center())).expect("the squeezed pill's words");
+    assert!(short.0.right() <= squeezed.right(), "the words end inside the pill: {short:?} in {squeezed:?}");
+    let long = texts.iter().find(|(rect, _)| whole.contains(rect.center())).expect("the whole pill's words");
+    assert!(long.0.right() <= whole.right(), "the words end inside the pill: {long:?} in {whole:?}");
+    // The galley keeps the whole text however much of it is drawn, so the cut is read from its width.
+    assert!(short.0.width() < long.0.width() * 0.6, "the squeezed words are cut short: {short:?} beside {long:?}");
+    let full = rux_full_width(&ctx, label);
+    assert!((long.0.width() - full).abs() < 1.0, "a pill given its measured width keeps every letter: {long:?}, {full}");
+}
+
+/// How wide the label is laid out whole, in the pill's own style.
+fn rux_full_width(ctx: &egui::Context, label: &str) -> f32 {
+    let painter = egui::Painter::new(ctx.clone(), egui::LayerId::background(), Rect::EVERYTHING);
+    rux::text::measure(&painter, rux::Style::sans(12.5).semibold(), label).x
+}
