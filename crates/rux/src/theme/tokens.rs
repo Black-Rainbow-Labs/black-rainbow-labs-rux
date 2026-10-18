@@ -586,6 +586,13 @@ impl Chat {
     }
 
     /// `--grad-out`: the action, lifted, with its blue glow and a lit top edge.
+    ///
+    /// **The same lift as a secondary pill, and then the glow** (Unluminous `task-2293`: *"Our primary action
+    /// button in agent chat doesn't quite match the style of the non primary action button ... it doesn't have
+    /// shadows and depth, so looks flat"*). It had the lit edge up and left and a blue glow where the dark fall
+    /// should be, and nothing else, so beside a secondary pill it read as a flat sticker. It now casts the
+    /// secondary's dark fall down and right, keeps the glow under it and softer, and is shaded inside as a
+    /// convex body: a sheen along its top left and a shade along its bottom right.
     pub fn action_raised(&self) -> Elevation {
         if self.glass {
             return Elevation::of([
@@ -595,8 +602,10 @@ impl Chat {
         }
         Elevation::of([
             Shadow::outer(-4.0, -4.0, 9.0, self.light),
-            Shadow::outer(4.0, 5.0, 12.0, self.action_glow),
-            Shadow::inset(0.0, 1.0, 0.0, Color32::WHITE.at(0.25)),
+            Shadow::outer(4.0, 5.0, 11.0, self.dark),
+            Shadow::outer(0.0, 6.0, 16.0, self.action_glow.gamma_multiply(0.7)),
+            Shadow::inset(1.0, 1.5, 2.0, Color32::WHITE.at(0.28)),
+            Shadow::inset(-1.5, -2.5, 5.0, Color32::BLACK.at(0.22)),
         ])
     }
 
