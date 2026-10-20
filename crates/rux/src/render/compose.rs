@@ -146,6 +146,10 @@ impl Sprites {
         if !self.by_key.contains_key(&key) {
             let started = std::time::Instant::now();
             let (size, fixed, pixels) = self.rasterise(key);
+            // **The size the picture was really drawn at.** `draw` makes a side of nothing one pixel, so a
+            // surface squeezed to no width came back as one column of pixels under a size of nothing, and the
+            // renderer refused the texture and ended the process (Unluminous `task-2317`).
+            let size = size.map(|side| side.clamp(1, 4096));
             super::cost::rasterised(started, u64::from(size[0]) * u64::from(size[1]));
             #[cfg(test)]
             let kept = pixels.clone();
@@ -888,6 +892,10 @@ fn inset_shadow(
     colour: Color32,
     scale: f32,
 ) -> Mesh {
+    // A carved surface with no width or no height has no inside to shade.
+    if surface.width() * scale < 1.0 || surface.height() * scale < 1.0 {
+        return Mesh::default();
+    }
     let gaps = [
         rect.min.x - surface.min.x,
         rect.min.y - surface.min.y,
@@ -1403,5 +1411,47 @@ mod tests {
             cuts(100.0, 100.0, 0.0, 0.0, 50.0, 2.0),
             vec![(0.0, 100.0, 0.0, 50.0)]
         );
+    }
+
+    /// A sprite's size is the size its picture was drawn at, even for a side of nothing, so the texture and its
+    /// pixels always agree. Unluminous `task-2317`: a carved well squeezed to no width made a sprite whose size
+    /// said 0 by 106 while its picture held 106 pixels, and the renderer ended the process on it.
+    #[test]
+    fn a_sprite_of_no_width_still_agrees_with_its_own_pixels() {
+        let ctx = egui::Context::default();
+        let mut sprites = pinned();
+        for (width, height) in [
+            (Some(0), Some(424)),
+            (Some(424), Some(0)),
+            (Some(0), Some(0)),
+        ] {
+            let key = Key::Inset {
+                clip: [0; 4],
+                radius: 40,
+                deviation: 20,
+                gaps: [0; 4],
+                width,
+                height,
+            };
+            let sprite = sprites.sprite(&ctx, key);
+            assert_eq!(
+                (sprite.size[0] * sprite.size[1]) as usize,
+                sprite.pixels.len(),
+                "{width:?} by {height:?}"
+            );
+        }
+        // And a carved surface with no width draws no shadow at all.
+        let mesh = inset_shadow(
+            &ctx,
+            &mut sprites,
+            Rect::from_min_size(pos2(10.0, 10.0), vec2(0.0, 106.0)),
+            Corners::all(8.0),
+            Rect::from_min_size(pos2(10.0, 10.0), vec2(0.0, 106.0)),
+            8.0,
+            4.0,
+            Color32::BLACK,
+            1.0,
+        );
+        assert!(mesh.is_empty());
     }
 }
