@@ -77,6 +77,10 @@ const fn solid(shape: Shape) -> Part {
     Part::solid(shape)
 }
 
+const fn filled_rect(x: f32, y: f32, w: f32, h: f32, rx: f32) -> Part {
+    Part::filled(Shape::Rect { x, y, w, h, rx })
+}
+
 const fn solid_rect(x: f32, y: f32, w: f32, h: f32, rx: f32) -> Part {
     Part::solid(Shape::Rect { x, y, w, h, rx })
 }
@@ -158,6 +162,21 @@ pub enum Icon {
     Palette,
     Puzzle,
     Plug,
+    // The transport and mixer marks a DAW needs (`task-2344`, Insonant). They are drawn here, not transcribed
+    // from a design canvas, in the same 24 point grid and stroke as the marks above.
+    Stop,
+    Record,
+    Loop,
+    Metronome,
+    Mute,
+    Solo,
+    Arm,
+    Fold,
+    Warp,
+    Midi,
+    Wave,
+    Scene,
+    Follow,
 }
 
 impl Icon {
@@ -236,9 +255,27 @@ impl Icon {
     /// The marks the Settings design added (`task-2246`).
     pub const SETTINGS: &'static [Icon] = &[Icon::Palette, Icon::Puzzle, Icon::Plug];
 
-    /// Every mark the library can draw: the reference's, the Agent-Chat design's and the Editing code design's.
+    /// The transport and mixer marks a DAW needs (`task-2344`). They are not `SbIcon`'s, so they are not in [`Icon::ALL`],
+    /// which `tests/reference.rs` compares against the reference.
+    pub const DAW: &'static [Icon] = &[
+        Icon::Stop,
+        Icon::Record,
+        Icon::Loop,
+        Icon::Metronome,
+        Icon::Mute,
+        Icon::Solo,
+        Icon::Arm,
+        Icon::Fold,
+        Icon::Warp,
+        Icon::Midi,
+        Icon::Wave,
+        Icon::Scene,
+        Icon::Follow,
+    ];
+
+    /// Every mark the library can draw: the reference's, the Agent-Chat design's, the Editing code design's, the Settings design's and the DAW set.
     pub fn every() -> impl Iterator<Item = Icon> {
-        Icon::ALL.iter().chain(Icon::CHAT).chain(Icon::WINDOW).chain(Icon::SETTINGS).copied()
+        Icon::ALL.iter().chain(Icon::CHAT).chain(Icon::WINDOW).chain(Icon::SETTINGS).chain(Icon::DAW).copied()
     }
 
     /// The `stroke-width` the mark's own drawing sets, in viewBox units.
@@ -327,6 +364,19 @@ impl Icon {
             Icon::Palette => "palette",
             Icon::Puzzle => "puzzle",
             Icon::Plug => "plug",
+            Icon::Stop => "stop",
+            Icon::Record => "record",
+            Icon::Loop => "loop",
+            Icon::Metronome => "metronome",
+            Icon::Mute => "mute",
+            Icon::Solo => "solo",
+            Icon::Arm => "arm",
+            Icon::Fold => "fold",
+            Icon::Warp => "warp",
+            Icon::Midi => "midi",
+            Icon::Wave => "wave",
+            Icon::Scene => "scene",
+            Icon::Follow => "follow",
         }
     }
 
@@ -499,6 +549,19 @@ impl Icon {
             Icon::Palette => const { &[p("M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17zM12 3.5v17M12 7.5h4.5M12 11.5h6M12 15.5h4.5")] },
             Icon::Puzzle => const { &[p("M9.5 4.5a2 2 0 0 1 4 0V6h3.5a1 1 0 0 1 1 1v3.5h-1.5a2 2 0 0 0 0 4H18V18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h2.5z")] },
             Icon::Plug => const { &[p("M9 3.5v4M15 3.5v4M7 7.5h10v3a5 5 0 0 1-10 0zM12 15.5v5")] },
+            Icon::Stop => const { &[filled_rect(6.0, 6.0, 12.0, 12.0, 2.0)] },
+            Icon::Record => const { &[dot(12.0, 12.0, 6.5)] },
+            Icon::Loop => const { &[p("M17 2.5l4 4-4 4M3 11.5v-2a3 3 0 0 1 3-3h15M7 21.5l-4-4 4-4M21 12.5v2a3 3 0 0 1-3 3H3")] },
+            Icon::Metronome => const { &[p("M9.5 3h5l4 18h-13z"), p("M12 16.5L15.5 7")] },
+            Icon::Mute => const { &[p("M4 9.5h3.5L12 5.5v13l-4.5-4H4z"), p("M16 9.5l5 5M21 9.5l-5 5")] },
+            Icon::Solo => const { &[p("M4.5 14v-2a7.5 7.5 0 0 1 15 0v2"), rect(3.5, 14.0, 4.0, 6.5, 1.5), rect(16.5, 14.0, 4.0, 6.5, 1.5)] },
+            Icon::Arm => const { &[circle(12.0, 12.0, 8.5), dot(12.0, 12.0, 3.5)] },
+            Icon::Fold => const { &[Part::filled(Shape::Path("M9 6l7 6-7 6z"))] },
+            Icon::Warp => const { &[p("M12 3v18"), p("M3 12h2l1.5-4 2 8 1.5-4h2M14 12h1.5l1.5-3 1.5 6 1-3H21")] },
+            Icon::Midi => const { &[circle(12.0, 12.0, 9.0), dot(6.5, 12.0, 0.8), dot(8.0, 8.0, 0.8), dot(12.0, 6.5, 0.8), dot(16.0, 8.0, 0.8), dot(17.5, 12.0, 0.8), p("M9 17.5h6")] },
+            Icon::Wave => const { &[p("M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4")] },
+            Icon::Scene => const { &[rect(2.5, 4.0, 5.0, 5.0, 1.0), rect(9.5, 4.0, 5.0, 5.0, 1.0), rect(16.5, 4.0, 5.0, 5.0, 1.0), Part::filled(Shape::Path("M9.5 14l6.5 4-6.5 4z"))] },
+            Icon::Follow => const { &[p("M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h4"), p("M10 12h11M17 8l4 4-4 4")] },
         }
     }
 }

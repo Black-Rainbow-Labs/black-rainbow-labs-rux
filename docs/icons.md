@@ -1,7 +1,7 @@
 # Icons
 
-rux draws 63 marks. Thirty seven are the AI Studio `SbIcon` set, eight came with the Agent-Chat design,
-fifteen with the Editing code design and three with the Settings design. Every mark's SVG path data is
+rux draws 76 marks. Thirty seven are the AI Studio `SbIcon` set, eight came with the Agent-Chat design,
+fifteen with the Editing code design, three with the Settings design and thirteen with the DAW set. Every mark's SVG path data is
 copied exactly from its source.
 
 Storybook: **Foundations → Icons**. The sheet draws every mark at 24 points and again at 13 points, the
@@ -42,8 +42,9 @@ Most components take an `Icon` directly: `Button::icon`, `IconButton::new`, `Chi
 | `Icon::CHAT` | 8: `Clock`, `Key`, `Tick`, `Cross`, `File`, `Rerun`, `Photo`, `Send` | Unluminous's window marks, and the canvas's paper airplane (task-2235) |
 | `Icon::WINDOW` | 15: `Project`, `Document`, `Git`, `Realm`, `Bubble`, `Board`, `Database`, `Bug`, `RunTile`, `Terminal`, `Letters`, `Lines`, `Halves`, `Eye`, `Start` | the Editing code page of the design canvas: the rail, the text options, the three view modes and the run triangle (task-2241) |
 | `Icon::SETTINGS` | 3: `Palette`, `Puzzle`, `Plug` | the Settings page of the design canvas (task-2246) |
+| `Icon::DAW` | 13: `Stop`, `Record`, `Loop`, `Metronome`, `Mute`, `Solo`, `Arm`, `Fold`, `Warp`, `Midi`, `Wave`, `Scene`, `Follow` | transport and mixer marks for a digital audio workstation, drawn in the same 24 point grid at the default stroke (task-2344) |
 
-`Icon::every()` walks all four sets. `icon.name()` answers the name the sheet prints, and `Icon::named(name)` finds a mark by that name. `Icon::ALL` stays
+`Icon::every()` walks all five sets. `icon.name()` answers the name the sheet prints, and `Icon::named(name)` finds a mark by that name. `Icon::ALL` stays
 exactly `SbIcon`'s set, and `tests/reference.rs` checks every name in it against the source.
 
 ## How a mark is drawn

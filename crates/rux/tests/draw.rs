@@ -487,6 +487,28 @@ fn every_chat_part_draws_in_both_themes_on_both_screens() {
     }
 }
 
+/// The DAW transport and mixer marks (`task-2344`), each drawn bare at 24 and 13 points and as the glyph of a
+/// round button, so the atlas rasterises every one of them with assertions on.
+fn every_daw_mark(rux: &mut rux::Rux<'_>) {
+    for (index, icon) in Icon::DAW.iter().enumerate() {
+        let x = 20.0 + index as f32 * 40.0;
+        rux.mark(Mark::new(*icon, 24.0), egui::pos2(x, 20.0), rux.theme().ink.i500);
+        rux.mark(Mark::new(*icon, 13.0).stroke(icon.stroke()), egui::pos2(x, 56.0), rux.theme().ink.i500);
+        let button = IconButton::new(*icon, icon.name()).size(IconButtonSize::Medium);
+        let want = button.measure(rux);
+        button.show(rux, Rect::from_min_size(egui::pos2(x - 12.0, 80.0), want));
+    }
+}
+
+#[test]
+fn every_daw_mark_draws_in_both_themes_on_both_screens() {
+    for theme in ["dark-neumorphic", "light-neumorphic", "dark-glass"] {
+        for screen in [desktop(), phone()] {
+            drawn(screen, theme, every_daw_mark);
+        }
+    }
+}
+
 /// The Agent-Tasks design's parts (`task-2241`): the view switch with and without its words, the sprint ring,
 /// the search well, a lane of each kind, a card with each of its round buttons, the chip button, the round tick
 /// box, a chip select open and shut, the small pill switch and the round action button.

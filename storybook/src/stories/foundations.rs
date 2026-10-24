@@ -287,9 +287,9 @@ fn icons(rux: &mut Rux<'_>, _demo: &mut Demo, area: Rect) -> f32 {
     }
     pen.strip(grid.height_for(Icon::CHAT.len()));
     pen.gap(GROUP_GAP);
-    // The Editing code design's marks (`task-2241`) and the Settings design's (`task-2246`), so the
+    // The Editing code design's marks (`task-2241`), the Settings design's (`task-2246`) and the DAW set (`task-2344`), so the
     // sheet shows every mark the library can draw.
-    for (title, set) in [("The Editing code marks", Icon::WINDOW), ("The Settings marks", Icon::SETTINGS)] {
+    for (title, set) in [("The Editing code marks", Icon::WINDOW), ("The Settings marks", Icon::SETTINGS), ("The DAW marks", Icon::DAW)] {
         group(rux, &mut pen, title);
         let grid = Grid::new(pen.rest(), columns).gap(22.0, 12.0).row_height(76.0);
         for (index, icon) in set.iter().enumerate() {

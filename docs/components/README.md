@@ -27,7 +27,7 @@ rules every component keeps.
 </tr>
 <tr>
 <td><a href="agent-tasks.md"><img src="../images/board-parts/dark-neumorphic.png" alt="Agent-Tasks parts"></a><br><b><a href="agent-tasks.md">Agent-Tasks parts</a></b><br>ViewSwitch, SprintRing, Lane, TaskCard, the ticket fields</td>
-<td><a href="../icons.md"><img src="../images/icons/dark-neumorphic.png" alt="Icons"></a><br><b><a href="../icons.md">Icons</a></b><br>63 marks</td>
+<td><a href="../icons.md"><img src="../images/icons/dark-neumorphic.png" alt="Icons"></a><br><b><a href="../icons.md">Icons</a></b><br>76 marks</td>
 <td><a href="../examples.md"><img src="../images/image-creator/dark-neumorphic.png" alt="Example pages"></a><br><b><a href="../examples.md">Example pages</a></b><br>The Image Creator page</td>
 </tr>
 </table>
