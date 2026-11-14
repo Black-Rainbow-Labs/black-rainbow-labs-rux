@@ -214,8 +214,10 @@ impl Sprites {
                 let fixed = [
                     width.map_or(side, |_| size[0]),
                     height.map_or(side, |_| size[1]),
-                    width.map_or(size[0] - side - BAND, |_| 0),
-                    height.map_or(size[1] - side - BAND, |_| 0),
+                    // `map_or_else`, because `map_or` works its default out even for a side of fixed length, and a
+                    // short fixed side is smaller than `side + BAND`: a debug build stopped on the subtraction.
+                    width.map_or_else(|| size[0] - side - BAND, |_| 0),
+                    height.map_or_else(|| size[1] - side - BAND, |_| 0),
                 ];
                 (size, fixed, pixels)
             }
@@ -1014,6 +1016,18 @@ mod tests {
             plan.iter().all(|step| step.cut.is_none()),
             "nothing here is cut by a rectangle"
         );
+    }
+
+    /// A shadow too short to stretch along one side keeps that side's whole length, and making its sprite does not
+    /// work out a band for that side (chordical-sheet-music task-2690: a 52 point panel with a 22 point radius stopped a
+    /// debug build with an overflow).
+    #[test]
+    fn a_sprite_of_fixed_width_and_height_has_no_band() {
+        let mut sprites = Sprites::new(RenderSettings::default());
+        let key = Key::Outer { radius: quarter(44.0), deviation: quarter(7.0), width: Some(quarter(20.0)), height: Some(quarter(16.0)) };
+        let (size, fixed, _) = sprites.rasterise(key);
+        assert_eq!([fixed[2], fixed[3]], [0, 0]);
+        assert_eq!([fixed[0], fixed[1]], size);
     }
 
     /// An opaque arc is a mesh, and a translucent one with round caps is left to the canvas, because its caps
