@@ -196,8 +196,10 @@ impl<'a> TextInput<'a> {
                 body,
                 egui::TextEdit::singleline(self.text)
                     .id(id)
-                    .frame(egui::Frame::NONE)
-                    .margin(margin)
+                    // **The margin goes on the frame.** egui 0.36 uses `TextEdit::margin` only when the edit builds its own
+                    // frame; with a frame given, the frame's inner margin is the only one, so `.margin(..)` beside
+                    // `Frame::NONE` was dropped and the text sat at the top of a tall field. chordical-sheet-music `task-2690`.
+                    .frame(egui::Frame::NONE.inner_margin(margin))
                     .desired_width(body.width())
                     .font(self.style.font())
                     .text_color(theme.ink.i900)
