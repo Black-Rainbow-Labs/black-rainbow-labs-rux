@@ -181,6 +181,39 @@ pub struct Sample {
 /// @param normal - the outward direction of the edge nearest the point, or zero at the centre
 /// @param depth - the signed distance to the edge, negative inside
 pub fn offset_at(glass: &Glass, pane: &Pane, at: Pos2, normal: Vec2, depth: f32) -> Vec2 {
+    offset_with(glass, pane, at, normal, depth, Rims::Design)
+}
+
+/// How the rim bends across the long sides of a piece of glass much longer than it is tall (`task-2815`).
+///
+/// The rim pulls the picture inward by `t^2.2` across a band `bevel` points deep, and at the design's strength
+/// the pull is about 1.9 times as steep as the band near the edge, so the picture folds back on itself there.
+/// Round a corner that fold is the bright ring that reads as glass. Along a straight side it stretches each
+/// speck of the picture across the band, and on a selected row 933 by 28 points the band is 85% of its height
+/// and 905 points long, so the whole row showed as streaks on a picture with fine grain. Measured in Chordical
+/// 0.39.2 under glass on `wood-weathered.jpg`; the texture coordinates of every vertex stayed inside the
+/// picture, so nothing was clamped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Rims {
+    /// The design's rim on every side.
+    #[default]
+    Design,
+    /// The rim's pull across the long sides is multiplied by the factor the design already puts on the lens's
+    /// pull across them, `min(short / long × 2.2, 1)`. A round button, a square card and any shape no more than
+    /// 2.2 times as long as it is tall bend as they did; a row 933 by 28 points bends 0.066 of the design across
+    /// its long sides, and its round ends still bend in full along the row.
+    Squashed,
+}
+
+/// [`offset_at`], with the rims bent the way `rims` says.
+///
+/// @param glass - the material
+/// @param pane - the piece of glass
+/// @param at - the point, in the layer's points
+/// @param normal - the outward direction of the edge nearest the point, or zero at the centre
+/// @param depth - the signed distance to the edge, negative inside
+/// @param rims - how the rim bends across long sides
+pub fn offset_with(glass: &Glass, pane: &Pane, at: Pos2, normal: Vec2, depth: f32, rims: Rims) -> Vec2 {
     let bevel = pane.bevel.max(0.5);
     let t = (1.0 + depth / bevel).clamp(0.0, 1.0);
     let rim = t.powf(2.2);
@@ -191,7 +224,20 @@ pub fn offset_at(glass: &Glass, pane: &Pane, at: Pos2, normal: Vec2, depth: f32)
     let down = (at.y - centre.y) / half.y.max(f32::EPSILON);
     let squash = (pane.rect.height() / pane.rect.width().max(f32::EPSILON) * 2.2).min(1.0);
     let lens = Vec2::new(across * glass.lens * inner, down * glass.lens * inner * squash);
-    (-normal * rim + lens) * pane.strength * 0.5
+    let pull = match rims {
+        Rims::Design => -normal * rim,
+        Rims::Squashed => -normal * rim * rim_squash(pane.rect.size()),
+    };
+    (pull + lens) * pane.strength * 0.5
+}
+
+/// What [`Rims::Squashed`] multiplies the rim's pull by, across and down: the design's lens squash,
+/// `min(short / long × 2.2, 1)`, on the axis across the long sides, and one on the other.
+///
+/// @param size - the piece of glass's size
+pub fn rim_squash(size: Vec2) -> Vec2 {
+    let (width, height) = (size.x.max(f32::EPSILON), size.y.max(f32::EPSILON));
+    Vec2::new((width / height * 2.2).min(1.0), (height / width * 2.2).min(1.0))
 }
 
 /// The corners of a rectangle each clamped to half its shorter side, in the order the rings walk them.
@@ -220,7 +266,7 @@ fn segments(radius: f32) -> usize {
 
 /// The vertices of one ring: the rounded rectangle moved `inset` points inwards (outwards when
 /// negative), walked clockwise from the left end of the top left corner.
-fn ring(pane: &Pane, glass: &Glass, inset: f32, cuts: [usize; 4], feather: bool) -> Vec<Sample> {
+fn ring(pane: &Pane, glass: &Glass, inset: f32, cuts: [usize; 4], feather: bool, rims: Rims) -> Vec<Sample> {
     let radii = radii(pane.rect, pane.corners);
     let shape = pane.rect.shrink(inset);
     // A corner's centre stays where it was while the corner is still round, and moves in with the
@@ -244,7 +290,7 @@ fn ring(pane: &Pane, glass: &Glass, inset: f32, cuts: [usize; 4], feather: bool)
             let angle = start + std::f32::consts::FRAC_PI_2 * step as f32 / cut as f32;
             let normal = Vec2::new(angle.cos(), angle.sin());
             let at = centre + normal * radius;
-            let offset = offset_at(glass, pane, at, normal, -inset);
+            let offset = offset_with(glass, pane, at, normal, -inset, rims);
             samples.push(Sample { at, offset, feather });
         }
     }
@@ -256,6 +302,19 @@ fn ring(pane: &Pane, glass: &Glass, inset: f32, cuts: [usize; 4], feather: bool)
 /// `feather` is how wide the faded band just inside the edge is, in the layer's points: one
 /// physical pixel, which is the feather `egui` gives its own rounded rectangles.
 pub fn geometry(glass: &Glass, pane: &Pane, feather: f32) -> (Vec<Sample>, Vec<u32>) {
+    geometry_with(glass, pane, feather, Rims::Design)
+}
+
+/// [`geometry`], with the rims bent the way `rims` says (`task-2815`).
+///
+/// Along a straight side the normal is constant, so the squashed rim is as linear there as the design's and
+/// the same rings follow it.
+///
+/// @param glass - the material
+/// @param pane - the piece of glass
+/// @param feather - how wide the faded band inside the edge is, in the layer's points
+/// @param rims - how the rim bends across long sides
+pub fn geometry_with(glass: &Glass, pane: &Pane, feather: f32, rims: Rims) -> (Vec<Sample>, Vec<u32>) {
     let half = pane.rect.width().min(pane.rect.height()) / 2.0;
     let radii = radii(pane.rect, pane.corners);
     // `feather` is one physical pixel in the layer's points, so this is each corner's radius in pixels.
@@ -270,11 +329,11 @@ pub fn geometry(glass: &Glass, pane: &Pane, feather: f32) -> (Vec<Sample>, Vec<u
     // fade centred on the edge left +4.6 at two pixels a point once the outline was a true curve; inside
     // it, +2.3, and +0.3 at 1.5.
     rings.push(samples.len());
-    samples.extend(ring(pane, glass, 0.0, cuts, true));
+    samples.extend(ring(pane, glass, 0.0, cuts, true, rims));
     for step in 0..=RINGS {
         rings.push(samples.len());
         let inset = (deepest * step as f32 / RINGS as f32).max(feather);
-        samples.extend(ring(pane, glass, inset, cuts, false));
+        samples.extend(ring(pane, glass, inset, cuts, false, rims));
     }
     let around = samples.len() / rings.len();
     let centre = samples.len() as u32;
@@ -349,11 +408,32 @@ pub fn shapes_cut(
     pixels_per_point: f32,
     seams: Seams,
 ) -> Vec<Shape> {
+    shapes_with(glass, pane, backdrop, to_global, pixels_per_point, seams, Rims::Design)
+}
+
+/// [`shapes_cut`], with the rims bent the way `rims` says (`task-2815`).
+///
+/// @param glass - the material
+/// @param pane - the piece of glass, in the layer's points
+/// @param backdrop - the picture it bends
+/// @param to_global - from the layer's points to the window's
+/// @param pixels_per_point - the display's density
+/// @param seams - whether the triangles a strip keeps share their vertices
+/// @param rims - how the rim bends across long sides
+pub fn shapes_with(
+    glass: &Glass,
+    pane: &Pane,
+    backdrop: &Backdrop,
+    to_global: egui::emath::TSTransform,
+    pixels_per_point: f32,
+    seams: Seams,
+    rims: Rims,
+) -> Vec<Shape> {
     if pane.rect.width() < 1.0 || pane.rect.height() < 1.0 || backdrop.bands.is_empty() {
         return Vec::new();
     }
     let scale = (pixels_per_point * to_global.scaling).max(0.1);
-    let (samples, indices) = geometry(glass, pane, 1.0 / scale);
+    let (samples, indices) = geometry_with(glass, pane, 1.0 / scale, rims);
     let opacity = (backdrop.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
     let mut shapes = Vec::with_capacity(1 + backdrop.bands.len());
     shapes.push(cover(&samples, &indices, opacity));
@@ -718,6 +798,8 @@ pub(crate) struct Built {
     pub pixels_per_point: f32,
     /// How it is cut at the picture's strips (`task-2810`).
     pub seams: Seams,
+    /// How its rims bend across long sides (`task-2815`).
+    pub rims: Rims,
 }
 
 #[cfg(test)]
@@ -1019,6 +1101,86 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The selected device row in Chordical's Settings dialog (`task-2815`): 933 by 28 points, fully round.
+    fn row() -> Pane {
+        Pane {
+            rect: Rect::from_min_max(Pos2::new(281.0, 589.0), Pos2::new(1214.2, 617.0)),
+            corners: Corners::all(14.0),
+            bevel: 11.76,
+            strength: 19.992,
+        }
+    }
+
+    /// Where the picture is sampled on the row's top side, ring by ring from the edge inward, as pairs of the
+    /// vertex's height and the sample's height. Every ring's top side starts where the top left corner ends.
+    fn down_the_top_side(rims: Rims) -> Vec<(f32, f32)> {
+        let pane = row();
+        let (samples, _) = geometry_with(&Glass::DESIGN, &pane, 0.5, rims);
+        let start = pane.rect.min.x + 14.0;
+        let mut down: Vec<(f32, f32)> = samples
+            .iter()
+            .filter(|s| !s.feather && s.at.y < pane.rect.center().y - 0.1 && (s.at.x - start).abs() < 1e-3)
+            .map(|s| (s.at.y, s.at.y + s.offset.y))
+            .collect();
+        down.sort_by(|a, b| a.0.total_cmp(&b.0));
+        down.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-3);
+        assert!(down.len() >= 6, "every ring crosses the top side: {down:?}");
+        down
+    }
+
+    #[test]
+    fn the_designs_rims_fold_the_picture_across_a_long_thin_row() {
+        // The cause of the streaks: going inward from the edge, the sample first moves back towards the edge.
+        let down = down_the_top_side(Rims::Design);
+        assert!(down.windows(2).any(|pair| pair[1].1 < pair[0].1), "{down:?}");
+    }
+
+    #[test]
+    fn squashed_rims_sample_a_long_thin_row_in_order() {
+        let down = down_the_top_side(Rims::Squashed);
+        for pair in down.windows(2) {
+            assert!(pair[1].1 > pair[0].1, "{down:?}");
+            // And nowhere is the picture stretched more than half again.
+            let stretch = (pair[1].0 - pair[0].0) / (pair[1].1 - pair[0].1);
+            assert!(stretch < 1.5, "{stretch} between {pair:?}");
+        }
+    }
+
+    #[test]
+    fn squashed_rims_still_bend_a_rows_round_ends_along_it() {
+        let pane = row();
+        let end = Pos2::new(pane.rect.max.x, pane.rect.center().y);
+        let design = offset_with(&Glass::DESIGN, &pane, end, Vec2::X, 0.0, Rims::Design);
+        let squashed = offset_with(&Glass::DESIGN, &pane, end, Vec2::X, 0.0, Rims::Squashed);
+        assert_eq!(design, squashed);
+        assert!(squashed.x < -9.0, "{squashed:?}");
+    }
+
+    #[test]
+    fn squashed_rims_change_nothing_on_a_shape_no_longer_than_the_design_squashes() {
+        let button = Pane {
+            rect: Rect::from_min_size(Pos2::new(208.0, 56.0), Vec2::splat(28.0)),
+            corners: Corners::all(14.0),
+            bevel: 11.76,
+            strength: 20.0,
+        };
+        let short_card = Pane { rect: Rect::from_min_size(Pos2::ZERO, Vec2::new(330.0, 152.0)), ..card() };
+        for pane in [button, short_card] {
+            let squashed = geometry_with(&Glass::DESIGN, &pane, 0.5, Rims::Squashed);
+            assert_eq!(squashed, geometry(&Glass::DESIGN, &pane, 0.5), "{pane:?}");
+        }
+        assert_eq!(rim_squash(Vec2::new(933.2, 28.0)).y, 28.0 / 933.2 * 2.2);
+        assert_eq!(rim_squash(Vec2::new(28.0, 933.2)).x, 28.0 / 933.2 * 2.2);
+    }
+
+    #[test]
+    fn the_design_is_the_default() {
+        assert_eq!(Rims::default(), Rims::Design);
+        let (pane, at) = (row(), Pos2::new(700.0, 590.0));
+        let design = offset_with(&Glass::DESIGN, &pane, at, -Vec2::Y, -1.0, Rims::Design);
+        assert_eq!(offset_at(&Glass::DESIGN, &pane, at, -Vec2::Y, -1.0), design);
     }
 
     #[test]

@@ -55,6 +55,14 @@ pub fn stories() -> Vec<Story> {
         },
         Story {
             section: "Foundations",
+            name: "Glass rims",
+            rule: "Canvases::set_glass_rims (task-2815)",
+            states: &["rims squashed", "a long row", "a round button", "a card"],
+            draw: glass_rims,
+            full_bleed: false,
+        },
+        Story {
+            section: "Foundations",
             name: "Radii",
             rule: "--r-sm … --r-pill",
             states: &["sm", "md", "lg", "xl", "2xl", "pill"],
@@ -414,6 +422,48 @@ fn drawing_cost(rux: &mut Rux<'_>, _demo: &mut Demo, area: Rect) -> f32 {
         let strip = pen.strip(galley.size().y);
         rux.ui.painter().galley(strip.left_top(), galley, ink);
         pen.gap(8.0);
+    }
+    pen.gap(GROUP_GAP);
+    pen.used()
+}
+
+/// The option that squashes a glass rim's pull across the long sides of a shape much longer than it is tall
+/// (`task-2815`), a switch on this storybook's own state, over a long row, a round button and a card. Seen under
+/// the dark glass theme with a picture behind it.
+fn glass_rims(rux: &mut Rux<'_>, _demo: &mut Demo, area: Rect) -> f32 {
+    let theme = rux.theme();
+    let mut pen = Pen::new(area);
+    note(
+        rux,
+        &mut pen,
+        "The design's rim pulls the picture inward more steeply than its band is deep, so the picture folds \
+         back on itself near the edge. Round a corner that is the ring that reads as glass; along the straight \
+         side of a long, thin row it stretches every speck of the picture into a streak. Squashed rims multiply \
+         the pull across the long sides by min(short / long x 2.2, 1), the factor the design already puts on the \
+         lens. Off unless an application turns it on; a shape no more than 2.2 times as long as it is tall is \
+         unchanged.",
+    );
+    group(rux, &mut pen, "The option, on this storybook");
+    let squashed = rux.state.canvases.borrow().glass_rims() == rux::render::glass::Rims::Squashed;
+    let rects = samples(rux, &mut pen, Switch::SIZE.y, &[("rims squashed", Switch::SIZE.x)]);
+    if Switch::new(squashed).show(rux, rects[0]).clicked() {
+        let next = match squashed {
+            true => rux::render::glass::Rims::Design,
+            false => rux::render::glass::Rims::Squashed,
+        };
+        rux.state.canvases.borrow_mut().set_glass_rims(next);
+    }
+    pen.gap(GROUP_GAP);
+
+    group(rux, &mut pen, "Raised surfaces under glass");
+    let cells = [("a long row", 520.0), ("a round button", 90.0), ("a card", 260.0)];
+    let rects = samples(rux, &mut pen, 140.0, &cells);
+    let sizes = [Vec2::new(500.0, 28.0), Vec2::splat(28.0), Vec2::new(240.0, 120.0)];
+    for (rect, size) in rects.iter().zip(sizes) {
+        let shape = Rect::from_center_size(rect.center(), size);
+        let radius = if size.y < 40.0 { size.y / 2.0 } else { theme.radius.lg };
+        let fill = rux::Fill::gradient(theme.chat.chip, shape);
+        rux.chrome.surface(shape, radius, fill, theme.chat.raised_chip());
     }
     pen.gap(GROUP_GAP);
     pen.used()

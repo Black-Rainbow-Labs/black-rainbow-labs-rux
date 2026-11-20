@@ -199,6 +199,7 @@ fn glazed(
     let to_global = ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
     let pixels_per_point = ctx.pixels_per_point();
     let seams = state.canvases.borrow().glass_seams();
+    let rims = state.canvases.borrow().glass_rims();
     let mut shapes = Vec::new();
     let mut open: Vec<Decor> = Vec::new();
     let mut run: Vec<Decor> = Vec::new();
@@ -239,6 +240,7 @@ fn glazed(
                     to_global,
                     pixels_per_point,
                     seams,
+                    rims,
                 };
                 let pane_id = id.with(("rux-glass", panes));
                 panes += 1;

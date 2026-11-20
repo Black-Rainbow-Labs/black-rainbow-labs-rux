@@ -299,6 +299,23 @@ fn every_component_draws_with_its_shapes_kept_and_its_glass_seams_shared() {
 }
 
 #[test]
+fn every_component_draws_with_its_glass_rims_squashed() {
+    // task-2815: the rim's pull across a long side squashed by the shape's aspect. The same pieces of glass with a
+    // different bend; a piece may cross one strip more or fewer of the picture, so the vertices are close but
+    // not equal.
+    let plain = drawn_with(desktop(), "dark-glass", |_| {}, every_component);
+    let squashed = drawn_with(
+        desktop(),
+        "dark-glass",
+        |state| state.canvases.borrow_mut().set_glass_rims(rux::render::glass::Rims::Squashed),
+        every_component,
+    );
+    let (plain_count, squashed_count) = (vertices_in(&plain), vertices_in(&squashed));
+    assert!(plain_count.abs_diff(squashed_count) * 100 < plain_count, "{squashed_count} against {plain_count}");
+    assert_ne!(format!("{squashed:?}"), format!("{plain:?}"), "the long sides bend less");
+}
+
+#[test]
 fn every_component_draws_on_a_phone() {
     drawn(phone(), "dark-neumorphic", every_component);
     drawn(phone(), "light-neumorphic", every_component);

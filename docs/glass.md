@@ -157,6 +157,45 @@ changes for an application that does not ask.
 
 `Canvases::set_keep_composed(true)` is the other half: see `docs/architecture.md`.
 
+## Long thin shapes: squashed rims (`task-2815`)
+
+The rim pulls the picture inward by `t^2.2` across a band `bevel` points deep. At the design's strength the pull
+is about 1.9 times as steep as the band near the edge (`2.2 × strength / 2 / bevel`, with `strength / bevel` = 1.7
+for every size below the caps), so going inward from the edge the sample first moves back towards the edge and
+the picture folds over itself. Round a corner the fold is the bright ring that reads as glass. Along a straight
+side it stretches each speck of the picture across the band.
+
+On a short side that band is a thin line at the edge. On a long, thin shape it is most of the shape: Chordical's
+selected device row in the Settings dialog is 933 by 28 points, its band is 11.76 points deep on each side, 85%
+of its height, and 905 points long, and on `wood-weathered.jpg` the whole row showed as streaks (Chordical
+0.39.2). Every texture coordinate of that row stayed inside the picture, between 0.248 and 0.907 across and
+0.766 and 0.779 down, so the picture's edge was never reached and clamping played no part.
+
+`Canvases::set_glass_rims(Rims::Squashed)` multiplies the rim's pull across the long sides by the factor the
+design already puts on the lens's pull across them, `min(short / long × 2.2, 1)`:
+
+| Piece of glass | Factor across the long sides |
+|---|---|
+| a round button, 28 points | 1 (unchanged) |
+| a card, 330 by 152 points | 1 (unchanged) |
+| a card, 424 by 152 points | 0.79 |
+| a nav item, 166 by 28 points | 0.37 |
+| the selected row, 933 by 28 points | 0.066 |
+
+The pull along the long sides, at a shape's round ends, is the design's. Along a straight side the normal is
+constant, so the squashed pull is as linear there as the design's and the same rings follow it: no vertex is
+added.
+
+```rust
+state.canvases.borrow_mut().set_glass_rims(rux::render::glass::Rims::Squashed);
+```
+
+`the_designs_rims_fold_the_picture_across_a_long_thin_row` shows the fold on that row and
+`squashed_rims_sample_a_long_thin_row_in_order` that with the option on the row is sampled in order and stretched
+no more than half again. An application that builds glass itself calls `glass::shapes_with`, `glass::geometry_with`
+or `glass::offset_with` with the same `Rims`. The default is `Rims::Design`, so nothing changes for an
+application that does not ask. The storybook's Foundations, Glass rims story has the switch.
+
 ## What it does not do
 
 - Glass inside glass bends the picture, not the glass under it. A browser bends the parent's already bent

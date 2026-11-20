@@ -450,6 +450,8 @@ pub struct Canvases {
     canvas_only: bool,
     /// How glass is cut at its picture's strips, set by [`Canvases::set_glass_seams`] (`task-2810`).
     glass_seams: super::glass::Seams,
+    /// How glass bends across its long sides, set by [`Canvases::set_glass_rims`] (`task-2815`).
+    glass_rims: super::glass::Rims,
     /// Whether a layer's composed shapes are kept between frames, set by [`Canvases::set_keep_composed`].
     keep_composed: bool,
     /// Each layer's composed shapes and what they were composed from, by the layer's id (`task-2810`).
@@ -480,6 +482,7 @@ impl Default for Canvases {
             sprites: super::compose::Sprites::default(),
             canvas_only: std::env::var("RUX_RASTER").is_ok_and(|named| named.trim() == "canvas"),
             glass_seams: super::glass::Seams::default(),
+            glass_rims: super::glass::Rims::default(),
             keep_composed: false,
             composed: HashMap::new(),
         }
@@ -558,6 +561,19 @@ impl Canvases {
     /// How glass in this window is cut, as [`Canvases::set_glass_seams`] last set it.
     pub fn glass_seams(&self) -> super::glass::Seams {
         self.glass_seams
+    }
+
+    /// How glass in this window bends across the long sides of a shape much longer than it is tall: see
+    /// [`super::glass::Rims`]. [`super::glass::Rims::Design`] unless an application sets it (`task-2815`).
+    ///
+    /// @param rims - how the rims bend
+    pub fn set_glass_rims(&mut self, rims: super::glass::Rims) {
+        self.glass_rims = rims;
+    }
+
+    /// How glass in this window bends across long sides, as [`Canvases::set_glass_rims`] last set it.
+    pub fn glass_rims(&self) -> super::glass::Rims {
+        self.glass_rims
     }
 
     /// [`Canvases::compose`] for the layer `id`, answered from what was kept when
@@ -644,13 +660,14 @@ impl Canvases {
             }
         }
         let started = std::time::Instant::now();
-        let shapes = super::glass::shapes_cut(
+        let shapes = super::glass::shapes_with(
             &built.glass,
             &built.pane,
             &built.backdrop,
             built.to_global,
             built.pixels_per_point,
             built.seams,
+            built.rims,
         );
         super::cost::glazed(started);
         self.glass.insert(id, (built, shapes.clone(), frame, std::time::Instant::now()));
