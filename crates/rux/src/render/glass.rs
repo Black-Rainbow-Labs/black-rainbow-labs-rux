@@ -314,6 +314,41 @@ pub fn shapes(
     to_global: egui::emath::TSTransform,
     pixels_per_point: f32,
 ) -> Vec<Shape> {
+    shapes_cut(glass, pane, backdrop, to_global, pixels_per_point, Seams::Apart)
+}
+
+/// How a piece of glass is cut at the seams between its picture's strips (`task-2810`).
+///
+/// Both draw the same triangles. [`Seams::Apart`] gives every triangle three vertices of its own, which is how
+/// glass has always been cut. [`Seams::Shared`] keeps one vertex for each point of the mesh inside a strip and
+/// one for each place an edge crosses a seam, the way the mesh was built. Measured in Chordical at two pixels a
+/// point over a picture uploaded as 32 strips: a 28 point round button was 9,425 vertices apart, and the
+/// window's own glass 30,277, because every triangle a strip keeps was copied out whole.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Seams {
+    /// Every triangle its own three vertices.
+    #[default]
+    Apart,
+    /// Triangles that meet share the vertices they meet at.
+    Shared,
+}
+
+/// [`shapes`], cut at the strips the way `seams` says.
+///
+/// @param glass - the material
+/// @param pane - the piece of glass, in the layer's points
+/// @param backdrop - the picture it bends
+/// @param to_global - from the layer's points to the window's
+/// @param pixels_per_point - the display's density
+/// @param seams - whether the triangles a strip keeps share their vertices
+pub fn shapes_cut(
+    glass: &Glass,
+    pane: &Pane,
+    backdrop: &Backdrop,
+    to_global: egui::emath::TSTransform,
+    pixels_per_point: f32,
+    seams: Seams,
+) -> Vec<Shape> {
     if pane.rect.width() < 1.0 || pane.rect.height() < 1.0 || backdrop.bands.is_empty() {
         return Vec::new();
     }
@@ -343,7 +378,10 @@ pub fn shapes(
         whole.indices.extend(indices.iter().map(|index| index + first));
     }
     for band in &backdrop.bands {
-        let mut piece = cut(&whole, band.drawn.0, band.drawn.1);
+        let mut piece = match seams {
+            Seams::Apart => cut(&whole, band.drawn.0, band.drawn.1),
+            Seams::Shared => cut_sharing_vertices(&whole, band.drawn.0, band.drawn.1),
+        };
         if piece.indices.is_empty() {
             continue;
         }
@@ -354,7 +392,49 @@ pub fn shapes(
         piece.texture_id = band.texture;
         shapes.push(Shape::mesh(piece));
     }
+    note_the_vertices(pane, &shapes);
     shapes
+}
+
+/// Append one line to the file `RUX_DEBUG_GLASS` names for a piece of glass just built: its rectangle, its
+/// corners, how many shapes it is and how many vertices each has (`task-2810`).
+///
+/// A piece of glass is built once and kept while nothing it is built from moves, so the file has one line for
+/// each piece of glass a window shows and one more each time one moves. That is how the vertices of a frame
+/// under glass are traced to the surfaces they belong to.
+///
+/// @param pane - the piece of glass
+/// @param shapes - what it was built as
+fn note_the_vertices(pane: &Pane, shapes: &[Shape]) {
+    let Some(file) = std::env::var_os("RUX_DEBUG_GLASS") else {
+        return;
+    };
+    let counts: Vec<usize> = shapes
+        .iter()
+        .map(|shape| match shape {
+            Shape::Mesh(mesh) => mesh.vertices.len(),
+            _ => 0,
+        })
+        .collect();
+    let total: usize = counts.iter().sum();
+    let rect = pane.rect;
+    let line = format!(
+        "glass {:.0}x{:.0} at {:.0},{:.0} corners {:.1} vertices {total} shapes {} each {counts:?}\n",
+        rect.width(),
+        rect.height(),
+        rect.min.x,
+        rect.min.y,
+        pane.corners.nw,
+        shapes.len(),
+    );
+    use std::io::Write;
+    if let Ok(mut out) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file)
+    {
+        let _ = out.write_all(line.as_bytes());
+    }
 }
 
 /// What covers what is behind the glass, by the picture's own opacity, so the three passes that follow
@@ -413,6 +493,150 @@ pub fn cut(mesh: &Mesh, top: f32, bottom: f32) -> Mesh {
         }
     }
     out
+}
+
+/// A point of a mesh being cut at a band's two lines: one of the mesh's own vertices, or the place one of its
+/// edges crosses a line. An edge is named by its two vertices, lower index first, so the two triangles that
+/// share an edge name the same crossing and are given the same vertex for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Point {
+    Own(u32),
+    /// The edge's two vertices, and whether the line is the band's bottom.
+    Crossing(u32, u32, bool),
+}
+
+/// [`cut`], with the triangles it keeps sharing their vertices the way they did in `mesh` (`task-2810`).
+///
+/// A vertex of `mesh` inside the band is kept once, however many triangles use it, and the place an edge crosses
+/// the band's top or bottom is made once, from the edge's own two vertices, for both triangles either side of it.
+/// The triangles are the ones [`cut`] keeps.
+///
+/// @param mesh - the whole piece, in picture coordinates
+/// @param top - the band's top, as a fraction of the picture's height
+/// @param bottom - its bottom
+pub fn cut_sharing_vertices(mesh: &Mesh, top: f32, bottom: f32) -> Mesh {
+    let mut out = Mesh::default();
+    let mut placed: std::collections::HashMap<Point, u32> = std::collections::HashMap::new();
+    let lines = (top, bottom);
+    for triangle in mesh.indices.chunks_exact(3) {
+        let rows = [0, 1, 2].map(|i| mesh.vertices[triangle[i] as usize].uv.y);
+        if rows.iter().all(|&y| y < top) || rows.iter().all(|&y| y > bottom) {
+            continue;
+        }
+        let corners = [0, 1, 2].map(|i| Point::Own(triangle[i]));
+        let kept = match rows.iter().all(|&y| y >= top && y <= bottom) {
+            true => corners.to_vec(),
+            false => {
+                let below_top = clip_points(&corners, mesh, lines, false);
+                clip_points(&below_top, mesh, lines, true)
+            }
+        };
+        if kept.len() < 3 {
+            continue;
+        }
+        let ids: Vec<u32> = kept
+            .iter()
+            .map(|&point| place(&mut out, &mut placed, mesh, lines, point))
+            .collect();
+        for next in 1..ids.len() - 1 {
+            out.indices.extend([ids[0], ids[next], ids[next + 1]]);
+        }
+    }
+    out
+}
+
+/// The texture row a [`Point`] is at: its vertex's, or the line it was made on.
+fn row_of(mesh: &Mesh, lines: (f32, f32), point: Point) -> f32 {
+    match point {
+        Point::Own(index) => mesh.vertices[index as usize].uv.y,
+        Point::Crossing(_, _, bottom) => {
+            if bottom {
+                lines.1
+            } else {
+                lines.0
+            }
+        }
+    }
+}
+
+/// The edge of `mesh` the side of a polygon from `from` to `to` lies on, lower index first.
+fn edge_under(from: Point, to: Point) -> Option<(u32, u32)> {
+    let (a, b) = match (from, to) {
+        (Point::Own(a), Point::Own(b)) => (a, b),
+        (Point::Crossing(a, b, _), Point::Own(_)) | (Point::Own(_), Point::Crossing(a, b, _)) => {
+            (a, b)
+        }
+        // Two crossings on one line: that side lies along the line and crosses no other.
+        _ => return None,
+    };
+    Some((a.min(b), a.max(b)))
+}
+
+/// One step of Sutherland and Hodgman's clipping over [`Point`]s: the part of `polygon` at or below the band's
+/// top line when `bottom` is false, and at or above its bottom line when it is true.
+fn clip_points(polygon: &[Point], mesh: &Mesh, lines: (f32, f32), bottom: bool) -> Vec<Point> {
+    let inside = |point: Point| {
+        let row = row_of(mesh, lines, point);
+        if bottom {
+            row <= lines.1
+        } else {
+            row >= lines.0
+        }
+    };
+    let mut out = Vec::with_capacity(polygon.len() + 2);
+    for (i, &current) in polygon.iter().enumerate() {
+        let previous = polygon[(i + polygon.len() - 1) % polygon.len()];
+        if inside(current) != inside(previous) {
+            if let Some((a, b)) = edge_under(previous, current) {
+                out.push(Point::Crossing(a, b, bottom));
+            }
+        }
+        if inside(current) {
+            out.push(current);
+        }
+    }
+    out
+}
+
+/// The index in `out` of `point`, adding its vertex the first time it is asked for.
+fn place(
+    out: &mut Mesh,
+    placed: &mut std::collections::HashMap<Point, u32>,
+    mesh: &Mesh,
+    lines: (f32, f32),
+    point: Point,
+) -> u32 {
+    if let Some(&index) = placed.get(&point) {
+        return index;
+    }
+    let vertex = match point {
+        Point::Own(index) => mesh.vertices[index as usize],
+        Point::Crossing(a, b, _) => {
+            let (from, to) = (mesh.vertices[a as usize], mesh.vertices[b as usize]);
+            let at = row_of(mesh, lines, point);
+            between(&from, &to, (at - from.uv.y) / (to.uv.y - from.uv.y))
+        }
+    };
+    let index = out.vertices.len() as u32;
+    out.vertices.push(vertex);
+    placed.insert(point, index);
+    index
+}
+
+/// The vertex the fraction `t` of the way from `from` to `to`: position, texture coordinate and colour.
+fn between(from: &Vertex, to: &Vertex, t: f32) -> Vertex {
+    let mix = |a: u8, b: u8| (f32::from(a) + (f32::from(b) - f32::from(a)) * t).round() as u8;
+    let [pa, pb] = [from.color.to_array(), to.color.to_array()];
+    Vertex {
+        pos: from.pos + (to.pos - from.pos) * t,
+        uv: from.uv + (to.uv - from.uv) * t,
+        color: Color32::from_rgba_premultiplied(
+            mix(pa[0], pb[0]),
+            mix(pa[1], pb[1]),
+            mix(pa[2], pb[2]),
+            mix(pa[3], pb[3]),
+        ),
+    }
 }
 
 /// The part of `mesh` inside `rect`, in the mesh's own positions, cut where its triangles cross the edge.
@@ -492,6 +716,8 @@ pub(crate) struct Built {
     pub backdrop: Arc<Backdrop>,
     pub to_global: egui::emath::TSTransform,
     pub pixels_per_point: f32,
+    /// How it is cut at the picture's strips (`task-2810`).
+    pub seams: Seams,
 }
 
 #[cfg(test)]
@@ -697,6 +923,122 @@ mod tests {
             .map(|v| v.color.to_array().iter().position(|&c| c > 0).unwrap())
             .collect();
         assert!(channels.contains(&0) && channels.contains(&1) && channels.contains(&2));
+    }
+
+    /// A backdrop of `strips` equal strips over a 500 by 200 point picture.
+    fn striped(strips: usize) -> Backdrop {
+        let bands = (0..strips)
+            .map(|i| {
+                let (top, bottom) = (i as f32 / strips as f32, (i + 1) as f32 / strips as f32);
+                Band {
+                    texture: TextureId::User(i as u64),
+                    drawn: (top, bottom),
+                    held: (top, bottom),
+                }
+            })
+            .collect();
+        Backdrop {
+            bands,
+            rect: Rect::from_min_size(Pos2::ZERO, Vec2::new(500.0, 200.0)),
+            uv: Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+            opacity: 0.75,
+        }
+    }
+
+    /// Every triangle of `mesh` as its three corners' positions, texture coordinates and colours.
+    fn triangles(mesh: &Mesh) -> Vec<[Vertex; 3]> {
+        mesh.indices
+            .chunks_exact(3)
+            .map(|t| [0, 1, 2].map(|i| mesh.vertices[t[i] as usize]))
+            .collect()
+    }
+
+    #[test]
+    fn shared_seams_draw_the_same_triangles_with_fewer_vertices() {
+        // task-2810: a 28 point round button and a card, over a picture in 32 strips, at two pixels a point.
+        let button = Pane {
+            rect: Rect::from_min_size(Pos2::new(208.0, 56.0), Vec2::splat(28.0)),
+            corners: Corners::all(14.0),
+            bevel: 14.0,
+            strength: 20.0,
+        };
+        for pane in [button, card()] {
+            let backdrop = striped(32);
+            let apart = shapes_cut(
+                &Glass::DESIGN,
+                &pane,
+                &backdrop,
+                Default::default(),
+                2.0,
+                Seams::Apart,
+            );
+            let shared = shapes_cut(
+                &Glass::DESIGN,
+                &pane,
+                &backdrop,
+                Default::default(),
+                2.0,
+                Seams::Shared,
+            );
+            assert_eq!(apart.len(), shared.len(), "the same pieces, one a strip");
+            let count = |drawn: &[Shape]| -> usize {
+                drawn
+                    .iter()
+                    .map(|s| {
+                        if let Shape::Mesh(m) = s {
+                            m.vertices.len()
+                        } else {
+                            0
+                        }
+                    })
+                    .sum()
+            };
+            assert!(
+                count(&shared) * 2 < count(&apart),
+                "{} against {}",
+                count(&shared),
+                count(&apart)
+            );
+            for (a, b) in apart.iter().zip(&shared) {
+                let (Shape::Mesh(a), Shape::Mesh(b)) = (a, b) else {
+                    panic!("glass is meshes")
+                };
+                assert_eq!(a.texture_id, b.texture_id);
+                let (a, b) = (triangles(a), triangles(b));
+                assert_eq!(a.len(), b.len());
+                for (x, y) in a.iter().zip(&b) {
+                    for (p, q) in x.iter().zip(y) {
+                        assert!((p.pos - q.pos).length() < 1e-3, "{p:?} against {q:?}");
+                        assert!((p.uv - q.uv).length() < 1e-5, "{p:?} against {q:?}");
+                        let [c, d] = [p.color.to_array(), q.color.to_array()];
+                        assert!(
+                            c.iter().zip(d).all(|(c, d)| c.abs_diff(d) <= 1),
+                            "{p:?} against {q:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_crossing_shared_by_two_triangles_is_one_vertex() {
+        // Two triangles making a square across one seam: the two points on the shared diagonal's crossing and
+        // the corners above the seam are each kept once.
+        let at = |x: f32, y: f32| Vertex {
+            pos: Pos2::new(x, y),
+            uv: Pos2::new(x, y),
+            color: Color32::WHITE,
+        };
+        let square = Mesh {
+            vertices: vec![at(0.0, 0.0), at(1.0, 0.0), at(1.0, 1.0), at(0.0, 1.0)],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            ..Mesh::default()
+        };
+        let upper = cut_sharing_vertices(&square, 0.0, 0.5);
+        // The two top corners, the right edge's and the left edge's crossings, and the diagonal's crossing.
+        assert_eq!(upper.vertices.len(), 5);
+        assert_eq!(cut(&square, 0.0, 0.5).vertices.len(), 7);
     }
 
     #[test]

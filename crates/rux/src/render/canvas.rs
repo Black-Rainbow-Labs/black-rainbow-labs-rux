@@ -448,6 +448,26 @@ pub struct Canvases {
     sprites: super::compose::Sprites,
     /// Whether layers are drawn as meshes where they can be, which they are unless `RUX_RASTER=canvas`.
     canvas_only: bool,
+    /// How glass is cut at its picture's strips, set by [`Canvases::set_glass_seams`] (`task-2810`).
+    glass_seams: super::glass::Seams,
+    /// Whether a layer's composed shapes are kept between frames, set by [`Canvases::set_keep_composed`].
+    keep_composed: bool,
+    /// Each layer's composed shapes and what they were composed from, by the layer's id (`task-2810`).
+    composed: HashMap<egui::Id, Composed>,
+}
+
+/// One layer's shapes from [`super::compose`], and what they were composed from.
+#[derive(Debug)]
+struct Composed {
+    items: Vec<Decor>,
+    scale: f32,
+    area: Rect,
+    /// The shapes, or `None` when the layer is one the composer leaves to a canvas.
+    shapes: Option<Vec<egui::Shape>>,
+    /// The shadow sprites the shapes draw from, kept alive while the shapes are.
+    sprites: Vec<egui::TextureId>,
+    used: u64,
+    used_at: std::time::Instant,
 }
 
 impl Default for Canvases {
@@ -459,6 +479,9 @@ impl Default for Canvases {
             deterministic: false,
             sprites: super::compose::Sprites::default(),
             canvas_only: std::env::var("RUX_RASTER").is_ok_and(|named| named.trim() == "canvas"),
+            glass_seams: super::glass::Seams::default(),
+            keep_composed: false,
+            composed: HashMap::new(),
         }
     }
 }
@@ -503,6 +526,83 @@ impl Canvases {
         composed
     }
 
+    /// Keep each layer's composed shapes between frames while its `Decor` list, its scale and its area are
+    /// unchanged (`task-2810`). Off unless an application turns it on.
+    ///
+    /// [`Canvases::compose`] builds every mesh of a layer again on every frame, even when nothing in it moved.
+    /// In the Chordical Synthesizer's editor that was 0.61 s in 20 s, about a quarter of the editor's processor
+    /// time. With this on, a still layer costs a comparison of its list and a copy of a few `Arc`s, the way a
+    /// canvas and a piece of glass already do. The shapes are the same ones, so the picture is the same.
+    ///
+    /// @param keep - true to keep them
+    pub fn set_keep_composed(&mut self, keep: bool) {
+        self.keep_composed = keep;
+        if !keep {
+            self.composed.clear();
+        }
+    }
+
+    /// Whether composed shapes are kept, as [`Canvases::set_keep_composed`] last set it.
+    pub fn keeps_composed(&self) -> bool {
+        self.keep_composed
+    }
+
+    /// How glass in this window is cut at the seams between its picture's strips: see
+    /// [`super::glass::Seams`]. [`super::glass::Seams::Apart`] unless an application sets it (`task-2810`).
+    ///
+    /// @param seams - how to cut it
+    pub fn set_glass_seams(&mut self, seams: super::glass::Seams) {
+        self.glass_seams = seams;
+    }
+
+    /// How glass in this window is cut, as [`Canvases::set_glass_seams`] last set it.
+    pub fn glass_seams(&self) -> super::glass::Seams {
+        self.glass_seams
+    }
+
+    /// [`Canvases::compose`] for the layer `id`, answered from what was kept when
+    /// [`Canvases::set_keep_composed`] is on and the layer has not changed since it was last composed.
+    ///
+    /// @param ctx - the context, which the sprites are uploaded through
+    /// @param id - the layer, the id its canvas would have
+    /// @param pixels_per_point - what the layer is composited at
+    /// @param items - its decoration
+    /// @param area - what the decoration may cover
+    pub fn compose_kept(
+        &mut self,
+        ctx: &egui::Context,
+        id: egui::Id,
+        pixels_per_point: f32,
+        items: &[Decor],
+        area: Rect,
+    ) -> Option<Vec<egui::Shape>> {
+        if !self.keep_composed || self.canvas_only || self.deterministic {
+            return self.compose(ctx, pixels_per_point, items, area);
+        }
+        let frame = self.frame;
+        if let Some(kept) = self.composed.get_mut(&id) {
+            let same = kept.scale == pixels_per_point && kept.area == area && kept.items == items;
+            if same && self.sprites.keep(&kept.sprites) {
+                kept.used = frame;
+                kept.used_at = std::time::Instant::now();
+                return kept.shapes.clone();
+            }
+        }
+        let shapes = self.compose(ctx, pixels_per_point, items, area);
+        let sprites = textures_in(shapes.as_deref().unwrap_or_default());
+        let kept = Composed {
+            items: items.to_vec(),
+            scale: pixels_per_point,
+            area,
+            shapes: shapes.clone(),
+            sprites,
+            used: frame,
+            used_at: std::time::Instant::now(),
+        };
+        self.composed.insert(id, kept);
+        shapes
+    }
+
     /// Rasterise one layer's decoration and answer the texture to paint and where to paint it.
     ///
     /// `pixels_per_point` is what the layer is composited at, which is `render::composited_scale`: the
@@ -544,12 +644,13 @@ impl Canvases {
             }
         }
         let started = std::time::Instant::now();
-        let shapes = super::glass::shapes(
+        let shapes = super::glass::shapes_cut(
             &built.glass,
             &built.pane,
             &built.backdrop,
             built.to_global,
             built.pixels_per_point,
+            built.seams,
         );
         super::cost::glazed(started);
         self.glass.insert(id, (built, shapes.clone(), frame, std::time::Instant::now()));
@@ -570,6 +671,7 @@ impl Canvases {
             canvas.put_by();
         }
         self.glass.retain(|_, (_, _, used, used_at)| *used == frame || used_at.elapsed() < KEEP_UNUSED);
+        self.composed.retain(|_, kept| kept.used == frame || kept.used_at.elapsed() < KEEP_UNUSED);
         self.sprites.tidy();
         self.frame = self.frame.wrapping_add(1);
     }
@@ -590,11 +692,125 @@ impl Canvases {
     }
 }
 
+/// The textures other than `egui`'s own that `shapes` draw from: a composed layer's shadow sprites.
+fn textures_in(shapes: &[egui::Shape]) -> Vec<egui::TextureId> {
+    let mut ids: Vec<egui::TextureId> = shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            egui::Shape::Mesh(mesh) => Some(mesh.texture_id),
+            _ => None,
+        })
+        .filter(|id| *id != egui::TextureId::default())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::render::Chrome;
     use crate::theme::light;
+
+    /// A card's shadow and fill, which the composer draws as a sprite and a mesh.
+    fn a_card(top: f32) -> Vec<Decor> {
+        let rect = Rect::from_min_size(egui::pos2(40.0, top), egui::vec2(200.0, 80.0));
+        vec![
+            Decor::Shadow {
+                rect,
+                radius: 12.0,
+                deviation: 6.0,
+                colour: Color32::BLACK,
+                inset: false,
+            },
+            Decor::Rect {
+                rect,
+                corners: Corners::from(12.0),
+                fill: Fill::from(Color32::GRAY),
+            },
+        ]
+    }
+
+    /// Whether two lists of shapes are the very same meshes, not copies of them.
+    fn the_same_meshes(a: &[egui::Shape], b: &[egui::Shape]) -> bool {
+        a.len() == b.len()
+            && a.iter().zip(b).all(|pair| match pair {
+                (egui::Shape::Mesh(x), egui::Shape::Mesh(y)) => std::sync::Arc::ptr_eq(x, y),
+                _ => false,
+            })
+    }
+
+    #[test]
+    fn a_still_layer_is_composed_once_when_its_shapes_are_kept() {
+        // task-2810: the synthesizer's editor composed every layer again on every frame.
+        let ctx = egui::Context::default();
+        let area = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 300.0));
+        let id = egui::Id::new("card");
+        let mut canvases = Canvases {
+            canvas_only: false,
+            ..Canvases::default()
+        };
+        let first = canvases
+            .compose_kept(&ctx, id, 2.0, &a_card(40.0), area)
+            .expect("composed");
+        let again = canvases
+            .compose_kept(&ctx, id, 2.0, &a_card(40.0), area)
+            .expect("composed");
+        assert!(
+            !the_same_meshes(&first, &again),
+            "off unless an application turns it on"
+        );
+
+        canvases.set_keep_composed(true);
+        let first = canvases
+            .compose_kept(&ctx, id, 2.0, &a_card(40.0), area)
+            .expect("composed");
+        canvases.tidy();
+        let again = canvases
+            .compose_kept(&ctx, id, 2.0, &a_card(40.0), area)
+            .expect("composed");
+        assert!(
+            the_same_meshes(&first, &again),
+            "a still layer is drawn from what was kept"
+        );
+        let moved = canvases
+            .compose_kept(&ctx, id, 2.0, &a_card(41.0), area)
+            .expect("composed");
+        assert!(
+            !the_same_meshes(&again, &moved),
+            "a card that moved is composed again"
+        );
+        let zoomed = canvases
+            .compose_kept(&ctx, id, 3.0, &a_card(41.0), area)
+            .expect("composed");
+        assert!(
+            !the_same_meshes(&moved, &zoomed),
+            "a new scale is composed again"
+        );
+    }
+
+    #[test]
+    fn kept_shapes_keep_their_shadow_sprites() {
+        let ctx = egui::Context::default();
+        let area = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 300.0));
+        let mut canvases = Canvases {
+            canvas_only: false,
+            ..Canvases::default()
+        };
+        canvases.set_keep_composed(true);
+        let shapes = canvases.compose_kept(&ctx, egui::Id::new("card"), 2.0, &a_card(40.0), area);
+        let sprites = textures_in(shapes.as_deref().unwrap_or_default());
+        assert_eq!(sprites.len(), 1, "the shadow is one sprite");
+        assert!(
+            canvases.sprites.keep(&sprites),
+            "and it is kept while the shapes are"
+        );
+        assert!(
+            !canvases.sprites.keep(&[egui::TextureId::User(999)]),
+            "a sprite that went is noticed"
+        );
+    }
 
     #[test]
     fn a_pixmap_is_the_same_four_bytes_as_egui() {

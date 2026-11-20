@@ -85,6 +85,14 @@ channel, a carved well within 6, and a whole surface to a mean of 0.1. **A deter
 composes**, so a screenshot test draws with the canvas and the pictures an application has accepted do not move.
 `RUX_RASTER=canvas` turns the composer off in a window, which is how the two are measured against each other.
 
+**A layer's composed shapes can be kept between frames** (`task-2810`). `Canvases::compose` builds every mesh of
+a layer again on every frame. `Canvases::set_keep_composed(true)` keeps each layer's shapes, by the layer's id,
+while its `Decor` list, its scale and its area are the ones they were composed from, the same comparison a
+canvas makes before it rasterises. The shadow sprites those shapes draw from are marked as used on every frame
+they are drawn, so they are not forgotten under them, and a layer whose sprite went anyway is composed again.
+In the Chordical Synthesizer's editor composing was 0.61 s in 20 s, about a quarter of the editor's processor
+time. It is off unless an application turns it on.
+
 ## A layer reserves its slot first
 
 ```rust

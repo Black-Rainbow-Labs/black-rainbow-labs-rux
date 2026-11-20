@@ -4,6 +4,7 @@
 //! right", and they are what a person looks at first after switching themes.
 
 use egui::{Rect, Vec2};
+use rux::components::Switch;
 use rux::layout::{Grid, Pen};
 use rux::text::Style;
 use rux::{Icon, Rux};
@@ -42,6 +43,14 @@ pub fn stories() -> Vec<Story> {
             rule: "SbIcon — reference/shared-components.jsx",
             states: &["all 37 marks", "agent-chat", "editing code", "settings", "24px", "13px"],
             draw: icons,
+            full_bleed: false,
+        },
+        Story {
+            section: "Foundations",
+            name: "Drawing cost",
+            rule: "Canvases::set_keep_composed · Canvases::set_glass_seams (task-2810)",
+            states: &["composed shapes kept", "glass seams shared", "vertices"],
+            draw: drawing_cost,
             full_bleed: false,
         },
         Story {
@@ -345,4 +354,105 @@ fn radii(rux: &mut Rux<'_>, _demo: &mut Demo, area: Rect) -> f32 {
     pen.gap(GROUP_GAP);
     let _ = Vec2::ZERO;
     pen.used()
+}
+
+/// The two options that draw the same picture for less (`task-2810`), each a switch on this storybook's own
+/// state, and what a piece of glass costs in vertices with its seams apart and shared.
+fn drawing_cost(rux: &mut Rux<'_>, _demo: &mut Demo, area: Rect) -> f32 {
+    let theme = rux.theme();
+    let mut pen = Pen::new(area);
+    note(
+        rux,
+        &mut pen,
+        "Both options are off unless an application turns them on, and neither changes the picture. Keeping \
+         composed shapes draws a layer whose Decor list, scale and area have not changed from the meshes it made \
+         last time. Sharing glass seams cuts a piece of glass at its picture's strips with one vertex for each \
+         point and each crossing, instead of three for every triangle.",
+    );
+    group(rux, &mut pen, "The options, on this storybook");
+    let (keep, seams) = {
+        let canvases = rux.state.canvases.borrow();
+        (canvases.keeps_composed(), canvases.glass_seams())
+    };
+    let shared = seams == rux::render::glass::Seams::Shared;
+    let cells = [
+        ("composed shapes kept", Switch::SIZE.x),
+        ("glass seams shared", Switch::SIZE.x),
+    ];
+    let rects = samples(rux, &mut pen, Switch::SIZE.y, &cells);
+    if Switch::new(keep).show(rux, rects[0]).clicked() {
+        rux.state.canvases.borrow_mut().set_keep_composed(!keep);
+    }
+    if Switch::new(shared).show(rux, rects[1]).clicked() {
+        let next = if shared {
+            rux::render::glass::Seams::Apart
+        } else {
+            rux::render::glass::Seams::Shared
+        };
+        rux.state.canvases.borrow_mut().set_glass_seams(next);
+    }
+    pen.gap(GROUP_GAP);
+
+    group(
+        rux,
+        &mut pen,
+        "Vertices in one piece of glass, over a picture in 32 strips, at 2 pixels a point",
+    );
+    for (name, size, radius) in [
+        ("a round button", 28.0, 14.0),
+        ("a card", 424.0, 22.0),
+        ("a window", 1280.0, 12.0),
+    ] {
+        let [apart, shared] = [
+            rux::render::glass::Seams::Apart,
+            rux::render::glass::Seams::Shared,
+        ]
+        .map(|seams| glass_vertices(size, radius, seams));
+        let line = format!("{name}, {size:.0} points: {apart} apart, {shared} shared");
+        let ink = theme.ink.i700;
+        let galley = rux.text(Style::BASE, &line, ink);
+        let strip = pen.strip(galley.size().y);
+        rux.ui.painter().galley(strip.left_top(), galley, ink);
+        pen.gap(8.0);
+    }
+    pen.gap(GROUP_GAP);
+    pen.used()
+}
+
+/// How many vertices one square piece of glass `size` points a side is built as, cut the way `seams` says.
+fn glass_vertices(size: f32, radius: f32, seams: rux::render::glass::Seams) -> usize {
+    use rux::render::glass::{shapes_cut, Pane};
+    let strips = 32;
+    let bands = (0..strips)
+        .map(|i| {
+            let (top, bottom) = (i as f32 / strips as f32, (i + 1) as f32 / strips as f32);
+            rux::render::Band {
+                texture: egui::TextureId::User(i),
+                drawn: (top, bottom),
+                held: (top, bottom),
+            }
+        })
+        .collect();
+    let room = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 780.0));
+    let backdrop = rux::render::Backdrop {
+        bands,
+        rect: room,
+        uv: Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+        opacity: 0.75,
+    };
+    let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(size, size.min(780.0)));
+    let pane = Pane {
+        rect,
+        corners: rux::Corners::all(radius),
+        bevel: radius.min(28.0),
+        strength: 40.0,
+    };
+    let glass = rux::theme::Glass::DESIGN;
+    shapes_cut(&glass, &pane, &backdrop, Default::default(), 2.0, seams)
+        .iter()
+        .map(|shape| match shape {
+            egui::Shape::Mesh(mesh) => mesh.vertices.len(),
+            _ => 0,
+        })
+        .sum()
 }

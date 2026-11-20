@@ -57,6 +57,38 @@ fn drawn(screen: Screen, theme: &str, body: impl FnOnce(&mut rux::Rux<'_>)) {
     state.end_frame();
 }
 
+/// Draw `body` on every one of three passes, with `setup` given the state first, and answer the last pass's
+/// shapes (`task-2810`). Each pass ends the frame, so the second and third are drawn from whatever the
+/// state kept from the one before.
+fn drawn_with(
+    screen: Screen,
+    theme: &str,
+    setup: impl FnOnce(&RuxState),
+    body: impl Fn(&mut rux::Rux<'_>),
+) -> Vec<egui::epaint::ClippedShape> {
+    let ctx = egui::Context::default();
+    rux::text::install(&ctx);
+    let state = RuxState::new(theme_named(&ctx, theme));
+    state.set_screen(screen);
+    setup(&state);
+    let screen_rect = Some(Rect::from_min_size(egui::pos2(0.0, 0.0), screen.size));
+    let input = egui::RawInput {
+        screen_rect,
+        ..Default::default()
+    };
+    let mut last = Vec::new();
+    for _ in 0..3 {
+        let mut output = ctx.run_ui(input.clone(), |ui| {
+            let area = ui.max_rect();
+            rux::layer(ui, &state, egui::Id::new("draw"), area, |rux| body(rux));
+        });
+        output.textures_delta.clear();
+        last = output.shapes;
+        state.end_frame();
+    }
+    last
+}
+
 /// A shipped theme by name, or `dark-glass`: the dark theme glazed (`task-2281`), with a picture behind
 /// it so every piece of glass is really bent and cut into its strips.
 fn theme_named(ctx: &egui::Context, name: &str) -> &'static Theme {
@@ -223,6 +255,47 @@ fn every_component_draws_on_a_desktop() {
     drawn(desktop(), "light-neumorphic", every_component);
     drawn(desktop(), "dark-neumorphic", every_component);
     drawn(desktop(), "dark-glass", every_component);
+}
+
+/// Every vertex in a frame's shapes.
+fn vertices_in(shapes: &[egui::epaint::ClippedShape]) -> usize {
+    fn count(shape: &egui::Shape) -> usize {
+        match shape {
+            egui::Shape::Mesh(mesh) => mesh.vertices.len(),
+            egui::Shape::Vec(shapes) => shapes.iter().map(count).sum(),
+            _ => 0,
+        }
+    }
+    shapes.iter().map(|clipped| count(&clipped.shape)).sum()
+}
+
+#[test]
+fn every_component_draws_with_its_shapes_kept_and_its_glass_seams_shared() {
+    // task-2810: both options on, under glass, every component drawn three passes, the last two from what the
+    // first kept. The glass is the same triangles in fewer vertices.
+    let plain = drawn_with(desktop(), "dark-glass", |_| {}, every_component);
+    let kept = drawn_with(
+        desktop(),
+        "dark-glass",
+        |state| {
+            let mut canvases = state.canvases.borrow_mut();
+            canvases.set_keep_composed(true);
+            canvases.set_glass_seams(rux::render::glass::Seams::Shared);
+        },
+        every_component,
+    );
+    assert!(
+        vertices_in(&kept) < vertices_in(&plain),
+        "{} against {}",
+        vertices_in(&kept),
+        vertices_in(&plain)
+    );
+    drawn_with(
+        phone(),
+        "dark-neumorphic",
+        |state| state.canvases.borrow_mut().set_keep_composed(true),
+        every_component,
+    );
 }
 
 #[test]

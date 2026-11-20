@@ -131,6 +131,25 @@ impl Sprites {
         (self.by_key.len(), pixels)
     }
 
+    /// Mark the sprites whose textures are `textures` as drawn this frame, and answer whether every one of them
+    /// is still kept. A layer whose shapes were kept between frames calls this instead of composing again, so the
+    /// sprites it draws from are not forgotten under it (`task-2810`).
+    ///
+    /// @param textures - the sprites' textures
+    pub(crate) fn keep(&mut self, textures: &[egui::TextureId]) -> bool {
+        let frame = self.frame;
+        let mut found = 0;
+        let now = std::time::Instant::now();
+        for sprite in self.by_key.values_mut() {
+            if textures.contains(&sprite.texture.id()) {
+                sprite.used = frame;
+                sprite.used_at = now;
+                found += 1;
+            }
+        }
+        found == textures.len()
+    }
+
     /// Forget the sprites not drawn for [`super::canvas::KEEP_UNUSED`]. Called once a frame.
     pub fn tidy(&mut self) {
         let frame = self.frame;

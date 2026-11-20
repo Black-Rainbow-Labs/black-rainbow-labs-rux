@@ -125,6 +125,38 @@ since it was last asked, for an application's frame trace.
 and keeps its texture, so a modal closed and opened again, or a pane hidden and shown again, is drawn from
 what it drew last time instead of rasterising again.
 
+## Fewer vertices with the same picture (`task-2810`)
+
+Each piece of glass is cut into one mesh for each strip of the picture it crosses. `glass::shapes` has always
+cut it with `glass::cut`, which writes three new vertices for every triangle a strip keeps, so a point shared by
+six triangles is written six times, once in each of the three colour passes. A picture of 3840 by 2160 pixels is
+uploaded in 32 strips, and in Chordical's S4 scene under glass on a MacBook Pro at two pixels a point
+(`RUX_DEBUG_GLASS=<file>` writes one line for each piece of glass built):
+
+| Piece of glass | Vertices, `Seams::Apart` | Vertices, `Seams::Shared` |
+|---|---|---|
+| the window, 1280 by 780 points | 30,277 | 13,128 |
+| a panel, 372 by 386 points | 17,337 | 6,708 |
+| a dialog, 520 by 240 points | 20,621 | 7,196 |
+| a round button, 28 points | 9,425 | 2,352 |
+
+A frame was 167,074 vertices and became 72,856. `egui` sends every vertex to the graphics card on every frame,
+kept or not, so the vertex count is what the glass costs a frame after it is built.
+
+```rust
+let mut canvases = state.canvases.borrow_mut();
+canvases.set_glass_seams(rux::render::glass::Seams::Shared);
+```
+
+`Seams::Shared` cuts with `glass::cut_sharing_vertices`: one vertex for each point of the mesh inside the strip,
+and one for each place an edge crosses the strip's top or bottom, made from the edge's own two ends so the two
+triangles beside the edge are given the same vertex. The triangles are the ones `glass::cut` keeps, which
+`shared_seams_draw_the_same_triangles_with_fewer_vertices` checks triangle by triangle. An application that
+builds glass itself calls `glass::shapes_cut` with the same `Seams`. The default is `Seams::Apart`, so nothing
+changes for an application that does not ask.
+
+`Canvases::set_keep_composed(true)` is the other half: see `docs/architecture.md`.
+
 ## What it does not do
 
 - Glass inside glass bends the picture, not the glass under it. A browser bends the parent's already bent

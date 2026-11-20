@@ -83,7 +83,7 @@ pub fn layer<R>(
     let Some(backdrop) = backdrop else {
         let mut canvases = state.canvases.borrow_mut();
         // As meshes, with every shadow a cached sprite, wherever that draws the same picture (`task-2288`).
-        if let Some(shapes) = canvases.compose(&ctx, scale, &items, area) {
+        if let Some(shapes) = canvases.compose_kept(&ctx, id, scale, &items, area) {
             painter.set(slot, egui::Shape::Vec(shapes));
             return result;
         }
@@ -198,6 +198,7 @@ fn glazed(
     let material = state.theme().glass.unwrap_or(crate::theme::Glass::DESIGN);
     let to_global = ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
     let pixels_per_point = ctx.pixels_per_point();
+    let seams = state.canvases.borrow().glass_seams();
     let mut shapes = Vec::new();
     let mut open: Vec<Decor> = Vec::new();
     let mut run: Vec<Decor> = Vec::new();
@@ -213,7 +214,7 @@ fn glazed(
             };
             let run_scale = glass_canvas_scale(run, scale);
             let mut canvases = state.canvases.borrow_mut();
-            match canvases.compose(ctx, scale, run, area) {
+            match canvases.compose_kept(ctx, run_id, scale, run, area) {
                 Some(composed) => shapes.extend(composed),
                 None => {
                     let drawn = canvases.texture_for(ctx, run_id, area, run_scale, run);
@@ -237,6 +238,7 @@ fn glazed(
                     backdrop: backdrop.clone(),
                     to_global,
                     pixels_per_point,
+                    seams,
                 };
                 let pane_id = id.with(("rux-glass", panes));
                 panes += 1;
