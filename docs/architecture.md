@@ -91,7 +91,8 @@ while its `Decor` list, its scale and its area are the ones they were composed f
 canvas makes before it rasterises. The shadow sprites those shapes draw from are marked as used on every frame
 they are drawn, so they are not forgotten under them, and a layer whose sprite went anyway is composed again.
 In the Chordical Synthesizer's editor composing was 0.61 s in 20 s, about a quarter of the editor's processor
-time. It is off unless an application turns it on.
+time. With the option on, the editor's processor time a frame in Chordical's S8 scene on a MacBook Pro went from
+3.75 ms to 2.86 ms (5 runs of 20 s, median), 120 ms a second to 96. It is off unless an application turns it on.
 
 ## A layer reserves its slot first
 
